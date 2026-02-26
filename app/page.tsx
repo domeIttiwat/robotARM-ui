@@ -19,6 +19,7 @@ const TrainingView = ({ onBack }: { onBack: () => void }) => {
   const { jointStates, railPos, setTeachMode } = useRos();
   const [jobName, setJobName] = useState("");
   const [tasks, setTasks] = useState<any[]>([]);
+  const [keyboardLang, setKeyboardLang] = useState<"en" | "th">("en");
   const jobNameInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -28,39 +29,35 @@ const TrainingView = ({ onBack }: { onBack: () => void }) => {
     };
   }, [setTeachMode]);
 
-  // Initialize KioskBoard for Thai and English input
+  // Initialize KioskBoard with Thai and English support
   useEffect(() => {
     if (jobNameInputRef.current) {
-      KioskBoard.init({
-        keysArrays: [
-          [
-            "1", "2", "3", "4", "5", "6", "7", "8", "9", "0",
-            "{bksp}"
-          ],
-          [
-            "q", "w", "e", "r", "t", "y", "u", "i", "o", "p",
-            "{shift}"
-          ],
-          [
-            "a", "s", "d", "f", "g", "h", "j", "k", "l",
-            "{shift}"
-          ],
-          [
-            "z", "x", "c", "v", "b", "n", "m", " ",
-            "{enter}"
+      const keysArrays = keyboardLang === "th"
+        ? [
+            ["ฟ", "ห", "ก", "ด", "เ", "า", "้", "่", "ป", "ย", "{bksp}"],
+            ["า", "ส", "ี", "ึ", "ุ", "ฺ", "์", "ํ", "ค", "ต"],
+            ["ี", "ร", "น", "ง", "จ", "ข", "ค", "ม", "ว", "{shift}"],
+            ["{accept}", " ", "{space}", "{enter}"]
           ]
-        ],
-        language: "en",
+        : [
+            ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "{bksp}"],
+            ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"],
+            ["a", "s", "d", "f", "g", "h", "j", "k", "l", "{shift}"],
+            ["{accept}", " ", "{space}", "{enter}"]
+          ];
+
+      KioskBoard.init({
+        keysArrays: keysArrays,
+        language: keyboardLang,
         theme: "light",
         display: "bottom",
         allowMobileKeyboard: true,
       });
 
-      // Attach to input
       jobNameInputRef.current.setAttribute("data-kioskboard-type", "text");
       jobNameInputRef.current.setAttribute("data-kioskboard-specialcharacters", "false");
     }
-  }, []);
+  }, [keyboardLang]);
 
   const addPoint = () => {
     setTasks([
@@ -94,6 +91,32 @@ const TrainingView = ({ onBack }: { onBack: () => void }) => {
       <div className="flex-1 flex overflow-hidden">
         <div className="w-80 p-8 border-r bg-white space-y-8 overflow-y-auto">
           <h2 className="text-3xl font-black tracking-tight">New Job</h2>
+
+          {/* Keyboard Language Toggle */}
+          <div className="flex gap-2 bg-gray-100 rounded-full p-1">
+            <button
+              onClick={() => setKeyboardLang("en")}
+              className={`flex-1 px-3 py-2 rounded-full text-xs font-semibold transition-all ${
+                keyboardLang === "en"
+                  ? "bg-white text-black shadow-sm"
+                  : "text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              English
+            </button>
+            <button
+              onClick={() => setKeyboardLang("th")}
+              className={`flex-1 px-3 py-2 rounded-full text-xs font-semibold transition-all ${
+                keyboardLang === "th"
+                  ? "bg-white text-black shadow-sm"
+                  : "text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              ไทย
+            </button>
+          </div>
+
+          {/* Job Name Input */}
           <input
             ref={jobNameInputRef}
             type="text"
