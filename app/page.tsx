@@ -32,6 +32,9 @@ const TrainingView = ({ onBack }: { onBack: () => void }) => {
   // Initialize KioskBoard with Thai and English support
   useEffect(() => {
     if (jobNameInputRef.current) {
+      // Set unique ID for targeting
+      jobNameInputRef.current.id = "jobNameInput";
+
       const keysArrays = keyboardLang === "th"
         ? [
             ["ฟ", "ห", "ก", "ด", "เ", "า", "้", "่", "ป", "ย", "{bksp}"],
@@ -46,7 +49,8 @@ const TrainingView = ({ onBack }: { onBack: () => void }) => {
             ["{accept}", " ", "{space}", "{enter}"]
           ];
 
-      KioskBoard.init({
+      // Initialize KioskBoard
+      (KioskBoard as any).init({
         keysArrays: keysArrays,
         language: keyboardLang,
         theme: "light",
@@ -54,8 +58,21 @@ const TrainingView = ({ onBack }: { onBack: () => void }) => {
         allowMobileKeyboard: true,
       });
 
-      jobNameInputRef.current.setAttribute("data-kioskboard-type", "text");
-      jobNameInputRef.current.setAttribute("data-kioskboard-specialcharacters", "false");
+      // Attach keyboard to the input element
+      const inputElement = jobNameInputRef.current;
+      inputElement.setAttribute("data-kioskboard", "true");
+      inputElement.setAttribute("data-kioskboard-type", "text");
+
+      // Show keyboard on focus
+      const handleFocus = () => {
+        (KioskBoard as any).show(inputElement);
+      };
+
+      inputElement.addEventListener("focus", handleFocus);
+
+      return () => {
+        inputElement.removeEventListener("focus", handleFocus);
+      };
     }
   }, [keyboardLang]);
 
