@@ -12,6 +12,7 @@
     "@prisma/adapter-better-sqlite3": "^7.4.1",
     "@prisma/client": "^6.19.2",
     "better-sqlite3": "^12.6.2",
+    "kioskboard": "^2.3.0",
     "lucide-react": "^0.376.0",
     "next": "16.1.6",
     "react": "19.2.3",

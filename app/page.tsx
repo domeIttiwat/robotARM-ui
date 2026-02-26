@@ -1,6 +1,7 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useRos } from "@/context/RosContext";
+import KioskBoard from "kioskboard";
 import {
   Play,
   Plus,
@@ -14,198 +15,11 @@ import {
   List,
 } from "lucide-react";
 
-const VirtualKeyboard = ({
-  onInput,
-  onClose,
-}: {
-  onInput: (key: string) => void;
-  onClose: () => void;
-}) => {
-  const [lang, setLang] = useState<"en" | "th" | "num">("en");
-  const [shift, setShift] = useState(false);
-
-  const englishRows = [
-    ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"],
-    ["Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P"],
-    ["A", "S", "D", "F", "G", "H", "J", "K", "L"],
-    ["Z", "X", "C", "V", "B", "N", "M"],
-  ];
-
-  const numberRows = [
-    ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"],
-    ["@", "#", "$", "%", "&", "*", "(", ")", "-", "+"],
-    ["=", "/", ":", ";", "'", "\"", "!", "?", "."],
-    [",", ".", "...", "-"],
-  ];
-
-  // Thai Kedmanee - ตามมาตรฐานอย่างแท้จริง
-  const thaiRowsNormal = [
-    ["ฟ", "ห", "ก", "ด", "เ", "า", "้", "่", "ป", "ย"],
-    ["า", "ส", "ี", "ึ", "ุ", "ฺ", "์", "ํ", "ค", "ต"],
-    ["ี", "ร", "น", "ง", "จ", "ข", "ค", "ม", "ว"],
-    ["ศ", "ษ", "ส"],
-  ];
-
-  const thaiRowsShift = [
-    ["เ", "แ", "โ", "ใ", "ไ", "ๅ", "ๆ", "ั", "ิ", "ี"],
-    ["ึ", "ื", "ุ", "ฺ", "๏", "๎", "๏", "๏", "ฒ", "ณ"],
-    ["ด", "ต", "ถ", "ท", "ธ", "ฏ", "ฐ", "ฟ", "ฤ"],
-    ["ล", "ฦ", "ฉ"],
-  ];
-
-  const rows =
-    lang === "num" ? numberRows :
-    lang === "en" ? englishRows :
-    (shift ? thaiRowsShift : thaiRowsNormal);
-
-  return (
-    <div className="fixed bottom-0 left-0 right-0 bg-gradient-to-b from-gray-200 to-gray-300 p-3 z-[1000] shadow-2xl">
-      <div className="max-w-full mx-auto px-2">
-        {/* Header */}
-        <div className="flex justify-between items-center mb-3 px-2">
-          <div className="flex gap-1">
-            <button
-              onClick={() => setLang("en")}
-              className={`px-3 py-1 rounded text-xs font-semibold transition-all ${
-                lang === "en"
-                  ? "bg-blue-500 text-white"
-                  : "bg-white text-gray-600"
-              }`}
-            >
-              ABC
-            </button>
-            <button
-              onClick={() => setLang("th")}
-              className={`px-3 py-1 rounded text-xs font-semibold transition-all ${
-                lang === "th"
-                  ? "bg-blue-500 text-white"
-                  : "bg-white text-gray-600"
-              }`}
-            >
-              ไทย
-            </button>
-            <button
-              onClick={() => setLang("num")}
-              className={`px-3 py-1 rounded text-xs font-semibold transition-all ${
-                lang === "num"
-                  ? "bg-blue-500 text-white"
-                  : "bg-white text-gray-600"
-              }`}
-            >
-              123
-            </button>
-          </div>
-          <span className="text-[10px] font-semibold text-gray-500">
-            {lang === "th" && shift ? "shift" : ""}
-          </span>
-          <button
-            onClick={onClose}
-            className="px-2 py-1 hover:bg-gray-400 rounded"
-          >
-            <X size={18} className="text-gray-600" />
-          </button>
-        </div>
-
-        {/* Keyboard */}
-        <div className="space-y-1.5">
-          {/* Row 1 */}
-          <div className="flex gap-1.5 justify-center">
-            {rows[0].map((k, idx) => (
-              <button
-                key={`0-${idx}`}
-                onClick={() => onInput(k)}
-                className="h-10 w-9 bg-white border border-gray-400 rounded-md shadow-sm active:scale-95 transition-all font-semibold text-sm flex items-center justify-center hover:bg-gray-50"
-              >
-                {k}
-              </button>
-            ))}
-          </div>
-
-          {/* Row 2 */}
-          <div className="flex gap-1.5 justify-center">
-            <div className="w-2" /> {/* Spacer for alignment */}
-            {rows[1].map((k, idx) => (
-              <button
-                key={`1-${idx}`}
-                onClick={() => onInput(k)}
-                className="h-10 w-9 bg-white border border-gray-400 rounded-md shadow-sm active:scale-95 transition-all font-semibold text-sm flex items-center justify-center hover:bg-gray-50"
-              >
-                {k}
-              </button>
-            ))}
-            <div className="w-2" /> {/* Spacer for alignment */}
-          </div>
-
-          {/* Row 3 - with Shift button */}
-          <div className="flex gap-1.5 justify-center">
-            <button
-              onClick={() => setShift(!shift)}
-              className={`h-10 px-3 rounded-md shadow-sm active:scale-95 transition-all font-semibold text-xs flex items-center justify-center ${
-                shift
-                  ? "bg-blue-500 text-white border border-blue-600"
-                  : "bg-white border border-gray-400 text-gray-700 hover:bg-gray-50"
-              }`}
-            >
-              ⇧
-            </button>
-            {rows[2].map((k, idx) => (
-              <button
-                key={`2-${idx}`}
-                onClick={() => onInput(k)}
-                className="h-10 w-9 bg-white border border-gray-400 rounded-md shadow-sm active:scale-95 transition-all font-semibold text-sm flex items-center justify-center hover:bg-gray-50"
-              >
-                {k}
-              </button>
-            ))}
-            <button
-              onClick={() => onInput("Del")}
-              className="h-10 px-2 bg-white border border-gray-400 rounded-md shadow-sm active:scale-95 transition-all font-semibold text-xs flex items-center justify-center hover:bg-gray-50"
-            >
-              ⌫
-            </button>
-          </div>
-
-          {/* Row 4 - Numbers/More with Space and Enter */}
-          <div className="flex gap-1.5 justify-center">
-            <button
-              onClick={() => setLang(lang === "num" ? "en" : "num")}
-              className="h-10 px-2 bg-white border border-gray-400 rounded-md shadow-sm active:scale-95 transition-all font-semibold text-xs flex items-center justify-center hover:bg-gray-50"
-            >
-              {lang === "num" ? "ABC" : "123"}
-            </button>
-            {rows[3] && rows[3].map((k, idx) => (
-              <button
-                key={`3-${idx}`}
-                onClick={() => onInput(k)}
-                className="h-10 w-9 bg-white border border-gray-400 rounded-md shadow-sm active:scale-95 transition-all font-semibold text-sm flex items-center justify-center hover:bg-gray-50"
-              >
-                {k}
-              </button>
-            ))}
-            <button
-              onClick={() => onInput("Space")}
-              className="h-10 flex-1 max-w-xs bg-white border border-gray-400 rounded-md shadow-sm active:scale-95 transition-all font-semibold text-xs flex items-center justify-center hover:bg-gray-50"
-            >
-              space
-            </button>
-            <button
-              onClick={() => onInput("\n")}
-              className="h-10 px-3 bg-blue-500 text-white border border-blue-600 rounded-md shadow-sm active:scale-95 transition-all font-semibold text-xs flex items-center justify-center hover:bg-blue-600"
-            >
-              return
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
 const TrainingView = ({ onBack }: { onBack: () => void }) => {
   const { jointStates, railPos, setTeachMode } = useRos();
   const [jobName, setJobName] = useState("");
   const [tasks, setTasks] = useState<any[]>([]);
-  const [kb, setKb] = useState(false);
+  const jobNameInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setTeachMode(true);
@@ -213,6 +27,40 @@ const TrainingView = ({ onBack }: { onBack: () => void }) => {
       setTeachMode(false);
     };
   }, [setTeachMode]);
+
+  // Initialize KioskBoard for Thai and English input
+  useEffect(() => {
+    if (jobNameInputRef.current) {
+      KioskBoard.init({
+        keysArrays: [
+          [
+            "1", "2", "3", "4", "5", "6", "7", "8", "9", "0",
+            "{bksp}"
+          ],
+          [
+            "q", "w", "e", "r", "t", "y", "u", "i", "o", "p",
+            "{shift}"
+          ],
+          [
+            "a", "s", "d", "f", "g", "h", "j", "k", "l",
+            "{shift}"
+          ],
+          [
+            "z", "x", "c", "v", "b", "n", "m", " ",
+            "{enter}"
+          ]
+        ],
+        language: "en",
+        theme: "light",
+        display: "bottom",
+        allowMobileKeyboard: true,
+      });
+
+      // Attach to input
+      jobNameInputRef.current.setAttribute("data-kioskboard-type", "text");
+      jobNameInputRef.current.setAttribute("data-kioskboard-specialcharacters", "false");
+    }
+  }, []);
 
   const addPoint = () => {
     setTasks([
@@ -246,16 +94,15 @@ const TrainingView = ({ onBack }: { onBack: () => void }) => {
       <div className="flex-1 flex overflow-hidden">
         <div className="w-80 p-8 border-r bg-white space-y-8 overflow-y-auto">
           <h2 className="text-3xl font-black tracking-tight">New Job</h2>
-          <div
-            onClick={() => setKb(true)}
-            className="p-5 bg-gray-50 border-2 border-transparent rounded-[28px] cursor-text min-h-[64px] flex items-center"
-          >
-            <span
-              className={`text-xl font-bold ${!jobName ? "text-gray-300" : "text-black"}`}
-            >
-              {jobName || "Name..."}
-            </span>
-          </div>
+          <input
+            ref={jobNameInputRef}
+            type="text"
+            value={jobName}
+            onChange={(e) => setJobName(e.target.value)}
+            placeholder="Name..."
+            className="w-full p-5 bg-gray-50 border-2 border-transparent rounded-[28px] text-xl font-bold placeholder-gray-300 focus:outline-none focus:border-blue-400 transition-colors"
+            data-kioskboard="true"
+          />
           <div className="p-6 bg-blue-50 text-blue-700 rounded-[30px] text-sm font-medium border border-blue-100">
             <div className="flex items-center gap-2 mb-2 font-bold">
               <Info size={18} /> Teaching Active
@@ -294,18 +141,6 @@ const TrainingView = ({ onBack }: { onBack: () => void }) => {
           </div>
         </div>
       </div>
-      {kb && (
-        <VirtualKeyboard
-          onInput={(k) =>
-            k === "Del"
-              ? setJobName((p) => p.slice(0, -1))
-              : k === "Space"
-                ? setJobName((p) => p + " ")
-                : setJobName((p) => p + k)
-          }
-          onClose={() => setKb(false)}
-        />
-      )}
     </div>
   );
 };
