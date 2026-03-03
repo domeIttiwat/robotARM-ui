@@ -60,6 +60,7 @@ interface Task {
   speed?: number;
   delay?: number;
   gripper?: number;
+  controlMode?: string;
 }
 
 interface JobEditorProps {
@@ -85,6 +86,7 @@ function SortableTaskCard({
   onTest,
   onDelete,
   onShowTaskJson,
+  onControlModeChange,
   isRunning = false,
   isDone = false,
 }: {
@@ -97,6 +99,7 @@ function SortableTaskCard({
   onTest: (idx: number) => void;
   onDelete: (idx: number) => void;
   onShowTaskJson: (idx: number) => void;
+  onControlModeChange: (id: number, mode: string) => void;
   isRunning?: boolean;
   isDone?: boolean;
 }) {
@@ -287,6 +290,24 @@ function SortableTaskCard({
           </span>
         </div>
 
+        {/* Row 5: Control Mode toggle */}
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] font-black font-sans opacity-50 w-16 flex-shrink-0">Mode</span>
+          {["joint", "effector"].map((m) => (
+            <button
+              key={m}
+              onClick={() => onControlModeChange(task.id, m)}
+              className={`px-3 py-1.5 rounded-full text-xs font-black transition-colors ${
+                (task.controlMode ?? "joint") === m
+                  ? m === "joint" ? "bg-gray-800 text-white" : "bg-purple-600 text-white"
+                  : "bg-gray-100 text-gray-400 hover:bg-gray-200"
+              }`}
+            >
+              {m === "joint" ? "Joint" : "Effector"}
+            </button>
+          ))}
+        </div>
+
         {/* Row 3: Action Buttons — large for touch */}
         <div className="flex gap-3 pt-1">
           <button
@@ -409,6 +430,7 @@ export default function JobEditor({
       gripper: gripperPos,
       speed: 50,
       delay: 2000,
+      controlMode: "effector",
     };
     setTasks((prev) => [...prev, newTask]);
     setShowCaptureModal(false);
@@ -438,6 +460,10 @@ export default function JobEditor({
 
   const updateTaskDelay = (index: number, value: number) => {
     setTasks(tasks.map((t, i) => (i === index ? { ...t, delay: value } : t)));
+  };
+
+  const updateTaskControlMode = (id: number, mode: string) => {
+    setTasks(tasks.map((t) => (t.id === id ? { ...t, controlMode: mode } : t)));
   };
 
   const recaptureTask = (index: number) => {
@@ -598,8 +624,8 @@ export default function JobEditor({
         );
 
         // Save all tasks with correct sequence (position in current array)
-        const saveResults = await Promise.all(
-          tasks.map((t, i) => {
+        await Promise.all(
+          tasks.map(async (t, i) => {
             const body = JSON.stringify({
               label: t.label,
               sequence: i + 1,
@@ -609,23 +635,18 @@ export default function JobEditor({
               speed: t.speed ?? 50,
               delay: t.delay ?? 0,
               gripper: t.gripper ?? 0,
+              controlMode: t.controlMode ?? "joint",
             });
-            if (originalTaskIds.has(t.id)) {
-              return fetch(`/api/jobs/${job?.id}/tasks/${t.id}`, {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body,
-              });
-            } else {
-              return fetch(`/api/jobs/${job?.id}/tasks`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body,
-              });
+            const res = await (originalTaskIds.has(t.id)
+              ? fetch(`/api/jobs/${job?.id}/tasks/${t.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body })
+              : fetch(`/api/jobs/${job?.id}/tasks`, { method: "POST", headers: { "Content-Type": "application/json" }, body })
+            );
+            if (!res.ok) {
+              const errData = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+              throw new Error(errData.error || `HTTP ${res.status}`);
             }
           })
         );
-        if (saveResults.some((r) => !r.ok)) throw new Error("Failed to save some tasks");
         showToast("บันทึกงานสำเร็จ!", true);
       }
       setTimeout(() => onSave(), 1200);
@@ -716,6 +737,13 @@ export default function JobEditor({
               <p className="text-xs opacity-70">ลากแถบซ้ายของการ์ดเพื่อเรียงลำดับ</p>
             </div>
           )}
+
+          <button
+            onClick={openCaptureModal}
+            className="w-full apple-btn bg-blue-600 text-white flex items-center justify-center gap-3 shadow-lg"
+          >
+            + Capture Position
+          </button>
         </div>
 
         {/* Right Panel — Sortable Timeline */}
@@ -723,14 +751,8 @@ export default function JobEditor({
           ref={scrollContainerRef}
           className="flex-1 p-10 overflow-y-auto bg-gray-50/50"
         >
-          <div className="flex justify-between items-end mb-10">
+          <div className="mb-10">
             <h2 className="text-4xl font-black tracking-tight">Timeline</h2>
-            <button
-              onClick={openCaptureModal}
-              className="apple-btn bg-blue-600 text-white flex items-center gap-3 shadow-lg"
-            >
-              + Capture Position
-            </button>
           </div>
 
           {tasks.length === 0 ? (
@@ -761,6 +783,7 @@ export default function JobEditor({
                       onDelete={deleteTask}
                       onDelayChange={updateTaskDelay}
                       onShowTaskJson={setTaskJsonIdx}
+                      onControlModeChange={updateTaskControlMode}
                       isRunning={dryRunIdx === idx}
                       isDone={dryRunIdx > idx && dryRunIdx >= 0}
                     />

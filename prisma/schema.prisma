@@ -33,9 +33,10 @@ model Task {
   rail      Float
 
   // Settings
-  speed     Int      @default(50)
-  delay     Int      @default(0)
-  gripper   Int      @default(0)
+  speed       Int    @default(50)
+  delay       Int    @default(0)
+  gripper     Int    @default(0)
+  controlMode String @default("joint")  // "joint" | "effector"
 
   createdAt DateTime @default(now())
 }

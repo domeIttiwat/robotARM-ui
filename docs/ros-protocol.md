@@ -112,21 +112,27 @@ Sent for each individual task during job execution. The UI sends tasks **one at 
 
 **Payload fields (inside `msg.data` as JSON string):**
 
-| Field      | Type   | Description                      |
-|------------|--------|----------------------------------|
-| `sequence` | int    | Task number (1-based)            |
-| `label`    | string | Human-readable task name         |
-| `j1`–`j6`  | float  | Target joint angles in degrees   |
-| `rail`     | float  | Target rail position in mm       |
-| `speed`    | int    | Movement speed (1–100%)          |
-| `gripper`  | int    | Target gripper position (0–100%) |
+| Field         | Type   | Description                                              |
+|---------------|--------|----------------------------------------------------------|
+| `sequence`    | int    | Task number (1-based)                                    |
+| `label`       | string | Human-readable task name                                 |
+| `j1`–`j6`    | float  | Target joint angles in degrees                           |
+| `rail`        | float  | Target rail position in mm                               |
+| `speed`       | int    | Movement speed (1–100%)                                  |
+| `gripper`     | int    | Target gripper position (0–100%)                         |
+| `controlMode` | string | `"joint"` (default) or `"effector"` — motion planner    |
+
+**`controlMode` behavior:**
+- `"joint"` → Move each joint directly to the target angle (joint-space interpolation). Fast and predictable.
+- `"effector"` → Compute FK from j1–j6 to get the Cartesian target pose, then use Cartesian/task-space motion planning (e.g., MoveIt! Cartesian path). The end-effector follows a straight line in Cartesian space.
 
 **Robot behavior:**
 1. Parse `msg.data` as JSON
-2. Publish `/robot_status = 1`
-3. Move all joints and rail to target positions simultaneously
-4. Set gripper to target value
-5. Publish `/robot_status = 0` when all axes have reached their targets
+2. Check `controlMode` to select motion planner
+3. Publish `/robot_status = 1`
+4. Execute motion (joint interpolation or Cartesian planning)
+5. Set gripper to target value
+6. Publish `/robot_status = 0` when all axes have reached their targets
 
 > **Note:** The `delay` field is **not** included in `/goto_position`. Delay is handled entirely by the UI (countdown shown between tasks). The robot should simply move and report done.
 

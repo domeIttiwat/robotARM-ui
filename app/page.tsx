@@ -21,6 +21,7 @@ interface Task {
   speed?: number;
   delay?: number;
   gripper?: number;
+  controlMode?: string;
 }
 
 interface Job {

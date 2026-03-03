@@ -39,6 +39,7 @@ interface Task {
   speed?: number;
   delay?: number;
   gripper?: number;
+  controlMode?: string;
 }
 
 interface Job {
@@ -755,6 +756,13 @@ export default function JobDetailView({ job, onBack, onUpdate, autoStart = false
                         ✊ {task.gripper}%
                       </span>
                     )}
+                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                      (task.controlMode ?? "joint") === "effector"
+                        ? "bg-purple-100 text-purple-700"
+                        : "bg-gray-100 text-gray-500"
+                    }`}>
+                      {(task.controlMode ?? "joint") === "effector" ? "Effector" : "Joint"}
+                    </span>
                   </div>
                 </div>
 
