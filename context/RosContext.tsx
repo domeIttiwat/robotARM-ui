@@ -97,7 +97,7 @@ export const RosProvider = ({ children }: { children: React.ReactNode }) => {
   useEffect(() => {
     const connectRos = () => {
       const rosInstance = new ROSLIB.Ros({
-        url: "ws://localhost:9090",
+        url: process.env.NEXT_PUBLIC_ROS_URL ?? "ws://localhost:9090",
       });
 
       rosInstance.on("connection", () => {

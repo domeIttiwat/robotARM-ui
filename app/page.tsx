@@ -298,7 +298,7 @@ const Dashboard = ({
                   <Activity size={28} className="text-gray-300" />
                 </div>
                 <p className="text-gray-400 text-sm font-bold">ยังไม่ได้เชื่อมต่อ</p>
-                <p className="text-gray-300 text-xs">กำลังรอ ROS Bridge<br/>ws://localhost:9090</p>
+                <p className="text-gray-300 text-xs">กำลังรอ ROS Bridge<br/>{process.env.NEXT_PUBLIC_ROS_URL ?? "ws://localhost:9090"}</p>
               </div>
             )}
           </div>
