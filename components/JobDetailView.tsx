@@ -40,6 +40,12 @@ interface Task {
   delay?: number;
   gripper?: number;
   controlMode?: string;
+  x?: number | null;
+  y?: number | null;
+  z?: number | null;
+  roll?: number | null;
+  pitch?: number | null;
+  yaw?: number | null;
 }
 
 interface Job {
@@ -135,6 +141,7 @@ export default function JobDetailView({ job, onBack, onUpdate, autoStart = false
     jointVelocities,
     railPos,
     gripperPos,
+    effectorPose,
   } = useRos();
 
   // Local execution state — fully decoupled from RosContext so robot feedback
@@ -574,48 +581,52 @@ export default function JobDetailView({ job, onBack, onUpdate, autoStart = false
       <div className="flex-1 flex overflow-hidden">
 
       {/* ── Left panel: real-time data ───────────────────── */}
-      <div className="w-60 bg-white border-r border-gray-100 shrink-0 flex flex-col p-5 gap-4 overflow-y-auto">
+      <div className="w-56 bg-white border-r border-gray-100 shrink-0 flex flex-col p-4 gap-3 overflow-y-auto">
         <p className="text-[10px] font-black text-gray-400 uppercase flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-blue-500 animate-ping inline-block" />
           Real-time
         </p>
 
-        {/* Joints */}
-        <div className="space-y-2">
+        {/* Joints — compact 3-column */}
+        <div className="grid grid-cols-3 gap-1.5">
           {jointStates.map((v, i) => (
-            <div key={i} className="p-3 bg-gray-50 rounded-2xl">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-black text-gray-400 uppercase">Axis {i + 1}</span>
-                <span className="font-mono font-black text-sm">{v.toFixed(1)}°</span>
-              </div>
-              <div className="text-right">
-                <span className="text-[10px] text-gray-300 font-mono tabular-nums">
-                  {(jointVelocities[i] ?? 0).toFixed(1)}°/s
-                </span>
-              </div>
+            <div key={i} className="p-2 bg-gray-50 rounded-xl text-center">
+              <span className="text-[8px] font-black text-gray-400 block uppercase">J{i + 1}</span>
+              <span className="text-xs font-mono font-black">{v.toFixed(1)}°</span>
+              <span className="text-[8px] text-gray-300 font-mono block">{(jointVelocities[i] ?? 0).toFixed(0)}°/s</span>
             </div>
           ))}
         </div>
 
+        {/* Effector Pose */}
+        <div className="p-3 bg-purple-50 rounded-2xl">
+          <p className="text-[8px] font-black text-purple-400 uppercase mb-1.5">Effector Pose</p>
+          <div className="grid grid-cols-3 gap-x-2 gap-y-0.5 text-[10px] font-mono text-purple-600">
+            <div><span className="opacity-50">X </span>{effectorPose.x.toFixed(0)}</div>
+            <div><span className="opacity-50">Y </span>{effectorPose.y.toFixed(0)}</div>
+            <div><span className="opacity-50">Z </span>{effectorPose.z.toFixed(0)}</div>
+            <div><span className="opacity-50">R </span>{effectorPose.roll.toFixed(1)}°</div>
+            <div><span className="opacity-50">P </span>{effectorPose.pitch.toFixed(1)}°</div>
+            <div><span className="opacity-50">Yw </span>{effectorPose.yaw.toFixed(1)}°</div>
+          </div>
+        </div>
+
         {/* Rail */}
-        <div className="p-4 bg-blue-600 rounded-2xl text-white">
-          <p className="text-[10px] font-black opacity-60 uppercase mb-1">Rail</p>
-          <p className="font-mono font-black text-xl">
-            {railPos.toFixed(1)}<span className="text-xs font-light opacity-50 ml-1">mm</span>
+        <div className="p-3 bg-blue-600 rounded-2xl text-white">
+          <p className="text-[8px] font-black opacity-60 uppercase mb-0.5">Rail</p>
+          <p className="font-mono font-black text-base">
+            {railPos.toFixed(1)}<span className="text-[10px] font-light opacity-50 ml-1">mm</span>
           </p>
         </div>
 
         {/* Gripper */}
-        <div className="p-4 bg-orange-50 rounded-2xl">
-          <p className="text-[10px] font-black text-orange-400 uppercase mb-1">Gripper</p>
-          <p className="font-mono font-black text-xl text-orange-500">
-            {gripperPos.toFixed(0)}<span className="text-xs font-light opacity-50 ml-1">%</span>
+        <div className="p-3 bg-orange-50 rounded-2xl">
+          <p className="text-[8px] font-black text-orange-400 uppercase mb-0.5">Gripper</p>
+          <p className="font-mono font-black text-base text-orange-500">
+            {gripperPos.toFixed(0)}<span className="text-[10px] font-light opacity-50 ml-1">%</span>
           </p>
-          <div className="mt-2 w-full h-1.5 bg-orange-100 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-orange-400 rounded-full transition-all duration-300"
-              style={{ width: `${gripperPos}%` }}
-            />
+          <div className="mt-1.5 w-full h-1 bg-orange-100 rounded-full overflow-hidden">
+            <div className="h-full bg-orange-400 rounded-full transition-all duration-300" style={{ width: `${gripperPos}%` }} />
           </div>
         </div>
       </div>
@@ -814,6 +825,22 @@ export default function JobDetailView({ job, onBack, onUpdate, autoStart = false
                     {task.gripper ?? 0}%
                   </span>
                 </div>
+                {task.x != null && (
+                  <>
+                    <div className="flex items-center gap-1.5 min-w-0 text-purple-500">
+                      <span className="font-black opacity-60 w-8 shrink-0">XYZ</span>
+                      <span className="font-mono truncate">
+                        {task.x.toFixed(0)}/{task.y!.toFixed(0)}/{task.z!.toFixed(0)} mm
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5 min-w-0 text-purple-500">
+                      <span className="font-black opacity-60 w-8 shrink-0">RPY</span>
+                      <span className="font-mono truncate">
+                        {task.roll!.toFixed(1)}°/{task.pitch!.toFixed(1)}°/{task.yaw!.toFixed(1)}°
+                      </span>
+                    </div>
+                  </>
+                )}
               </div>
 
               {/* Per-task progress bar */}

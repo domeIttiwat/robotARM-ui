@@ -22,6 +22,12 @@ interface Task {
   delay?: number;
   gripper?: number;
   controlMode?: string;
+  x?: number | null;
+  y?: number | null;
+  z?: number | null;
+  roll?: number | null;
+  pitch?: number | null;
+  yaw?: number | null;
 }
 
 interface Job {
@@ -45,7 +51,7 @@ const Dashboard = ({
   autoHome: boolean;
   onToggleAutoHome: () => void;
 }) => {
-  const { jointStates, railPos, gripperPos, isConnected, sendGotoPosition } = useRos();
+  const { jointStates, railPos, gripperPos, effectorPose, isConnected, sendGotoPosition } = useRos();
   const [jobs, setJobs] = useState<Job[]>([]);
   const [viewMode, setViewMode] = useState<"card" | "list">(() => {
     if (typeof window !== "undefined") {
@@ -254,42 +260,46 @@ const Dashboard = ({
               Real-time Data
             </h3>
             {isConnected ? (
-              <div className="grid grid-cols-2 gap-6 flex-1">
-                {jointStates.map((v, i) => (
-                  <div
-                    key={i}
-                    className="p-6 bg-gray-50 rounded-[28px] border border-gray-100/50"
-                  >
-                    <span className="text-[10px] font-black text-gray-400 block mb-2 uppercase">
-                      Axis {i + 1}
-                    </span>
-                    <span className="text-2xl font-mono font-black">
-                      {v.toFixed(1)}°
-                    </span>
+              <div className="flex flex-col gap-4 flex-1 overflow-y-auto">
+                {/* Joints — compact 3-column */}
+                <div className="grid grid-cols-3 gap-2">
+                  {jointStates.map((v, i) => (
+                    <div key={i} className="p-3 bg-gray-50 rounded-[20px] text-center border border-gray-100/50">
+                      <span className="text-[9px] font-black text-gray-400 block uppercase">J{i + 1}</span>
+                      <span className="text-sm font-mono font-black">{v.toFixed(1)}°</span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* End-Effector Pose */}
+                <div className="p-4 bg-purple-50 rounded-3xl border border-purple-100">
+                  <span className="text-[9px] font-black text-purple-400 block uppercase mb-2">End-Effector</span>
+                  <div className="grid grid-cols-3 gap-x-3 gap-y-1 text-xs font-mono text-purple-600">
+                    <div><span className="opacity-50">X </span>{effectorPose.x.toFixed(1)}</div>
+                    <div><span className="opacity-50">Y </span>{effectorPose.y.toFixed(1)}</div>
+                    <div><span className="opacity-50">Z </span>{effectorPose.z.toFixed(1)}</div>
+                    <div><span className="opacity-50">R </span>{effectorPose.roll.toFixed(1)}°</div>
+                    <div><span className="opacity-50">P </span>{effectorPose.pitch.toFixed(1)}°</div>
+                    <div><span className="opacity-50">Yw </span>{effectorPose.yaw.toFixed(1)}°</div>
                   </div>
-                ))}
-                <div className="p-8 bg-blue-600 rounded-[40px] text-white shadow-xl">
-                  <span className="text-[10px] font-black opacity-60 block mb-3 uppercase">
-                    Linear Rail
-                  </span>
-                  <span className="text-4xl font-mono font-black">
-                    {railPos.toFixed(1)}{" "}
-                    <span className="text-xl font-light opacity-50">mm</span>
+                </div>
+
+                {/* Rail */}
+                <div className="p-5 bg-blue-600 rounded-[28px] text-white shadow-xl">
+                  <span className="text-[9px] font-black opacity-60 block mb-1.5 uppercase">Linear Rail</span>
+                  <span className="text-3xl font-mono font-black">
+                    {railPos.toFixed(1)}<span className="text-base font-light opacity-50 ml-1">mm</span>
                   </span>
                 </div>
-                <div className="p-8 bg-orange-500 rounded-[40px] text-white shadow-xl">
-                  <span className="text-[10px] font-black opacity-60 block mb-3 uppercase">
-                    Gripper
+
+                {/* Gripper */}
+                <div className="p-5 bg-orange-500 rounded-[28px] text-white shadow-xl">
+                  <span className="text-[9px] font-black opacity-60 block mb-1.5 uppercase">Gripper</span>
+                  <span className="text-3xl font-mono font-black">
+                    {gripperPos.toFixed(0)}<span className="text-base font-light opacity-50 ml-1">%</span>
                   </span>
-                  <span className="text-4xl font-mono font-black">
-                    {gripperPos.toFixed(0)}{" "}
-                    <span className="text-xl font-light opacity-50">%</span>
-                  </span>
-                  <div className="mt-3 w-full h-2 bg-white/20 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-white rounded-full transition-all duration-300"
-                      style={{ width: `${gripperPos}%` }}
-                    />
+                  <div className="mt-2 w-full h-1.5 bg-white/20 rounded-full overflow-hidden">
+                    <div className="h-full bg-white rounded-full transition-all duration-300" style={{ width: `${gripperPos}%` }} />
                   </div>
                 </div>
               </div>

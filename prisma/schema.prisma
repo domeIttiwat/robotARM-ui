@@ -38,5 +38,13 @@ model Task {
   gripper     Int    @default(0)
   controlMode String @default("joint")  // "joint" | "effector"
 
+  // Cartesian end-effector pose (captured at teach time, used for IK in effector mode)
+  x     Float?  // End-effector X in mm
+  y     Float?  // End-effector Y in mm
+  z     Float?  // End-effector Z in mm
+  roll  Float?  // Roll in degrees
+  pitch Float?  // Pitch in degrees
+  yaw   Float?  // Yaw in degrees
+
   createdAt DateTime @default(now())
 }

@@ -61,6 +61,12 @@ interface Task {
   delay?: number;
   gripper?: number;
   controlMode?: string;
+  x?: number | null;
+  y?: number | null;
+  z?: number | null;
+  roll?: number | null;
+  pitch?: number | null;
+  yaw?: number | null;
 }
 
 interface JobEditorProps {
@@ -248,6 +254,22 @@ function SortableTaskCard({
               {task.gripper ?? 0}%
             </span>
           </div>
+          {task.x != null && (
+            <>
+              <div className="flex items-center gap-2 min-w-0 text-purple-500">
+                <span className="text-[11px] font-black opacity-60 w-9 flex-shrink-0">XYZ</span>
+                <span className="font-mono font-bold text-xs truncate">
+                  {task.x.toFixed(0)}/{task.y!.toFixed(0)}/{task.z!.toFixed(0)} mm
+                </span>
+              </div>
+              <div className="flex items-center gap-2 min-w-0 text-purple-500">
+                <span className="text-[11px] font-black opacity-60 w-9 flex-shrink-0">RPY</span>
+                <span className="font-mono font-bold text-xs truncate">
+                  {task.roll!.toFixed(1)}°/{task.pitch!.toFixed(1)}°/{task.yaw!.toFixed(1)}°
+                </span>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Row 3: Speed slider */}
@@ -371,7 +393,7 @@ export default function JobEditor({
   onSave,
   onCancel,
 }: JobEditorProps) {
-  const { jointStates, railPos, gripperPos, setTeachMode, sendGotoPosition } =
+  const { jointStates, railPos, gripperPos, effectorPose, setTeachMode, sendGotoPosition } =
     useRos();
   const [jobName, setJobName] = useState(job?.name || "");
   const [jobDescription, setJobDescription] = useState(job?.description || "");
@@ -431,6 +453,12 @@ export default function JobEditor({
       speed: 50,
       delay: 2000,
       controlMode: "effector",
+      x: effectorPose.x,
+      y: effectorPose.y,
+      z: effectorPose.z,
+      roll: effectorPose.roll,
+      pitch: effectorPose.pitch,
+      yaw: effectorPose.yaw,
     };
     setTasks((prev) => [...prev, newTask]);
     setShowCaptureModal(false);
@@ -480,6 +508,12 @@ export default function JobEditor({
               j6: jointStates[5],
               rail: railPos,
               gripper: gripperPos,
+              x: effectorPose.x,
+              y: effectorPose.y,
+              z: effectorPose.z,
+              roll: effectorPose.roll,
+              pitch: effectorPose.pitch,
+              yaw: effectorPose.yaw,
             }
           : t
       )
@@ -598,7 +632,11 @@ export default function JobEditor({
           const taskRes = await fetch(`/api/jobs/${newJobId}/tasks`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ ...tasks[i], sequence: i + 1 }),
+            body: JSON.stringify({
+              ...tasks[i], sequence: i + 1,
+              x: tasks[i].x ?? null, y: tasks[i].y ?? null, z: tasks[i].z ?? null,
+              roll: tasks[i].roll ?? null, pitch: tasks[i].pitch ?? null, yaw: tasks[i].yaw ?? null,
+            }),
           });
           if (!taskRes.ok) throw new Error("Failed to create task");
         }
@@ -636,6 +674,8 @@ export default function JobEditor({
               delay: t.delay ?? 0,
               gripper: t.gripper ?? 0,
               controlMode: t.controlMode ?? "joint",
+              x: t.x ?? null, y: t.y ?? null, z: t.z ?? null,
+              roll: t.roll ?? null, pitch: t.pitch ?? null, yaw: t.yaw ?? null,
             });
             const res = await (originalTaskIds.has(t.id)
               ? fetch(`/api/jobs/${job?.id}/tasks/${t.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body })
@@ -936,28 +976,42 @@ export default function JobEditor({
             </div>
 
             {/* Current position preview */}
-            <div className="bg-gray-50 rounded-2xl p-4 grid grid-cols-2 gap-2 text-xs font-mono text-gray-500">
-              <div className="flex items-center gap-1.5">
-                <RotateCcw size={11} className="opacity-50 flex-shrink-0" />
-                <span>
-                  J1-J3: {jointStates[0].toFixed(1)}° /{" "}
-                  {jointStates[1].toFixed(1)}° / {jointStates[2].toFixed(1)}°
-                </span>
+            <div className="space-y-2">
+              <div className="bg-gray-50 rounded-2xl p-4 grid grid-cols-2 gap-2 text-xs font-mono text-gray-500">
+                <div className="flex items-center gap-1.5">
+                  <RotateCcw size={11} className="opacity-50 flex-shrink-0" />
+                  <span>
+                    J1-J3: {jointStates[0].toFixed(1)}° /{" "}
+                    {jointStates[1].toFixed(1)}° / {jointStates[2].toFixed(1)}°
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <RotateCcw size={11} className="opacity-50 flex-shrink-0" />
+                  <span>
+                    J4-J6: {jointStates[3].toFixed(1)}° /{" "}
+                    {jointStates[4].toFixed(1)}° / {jointStates[5].toFixed(1)}°
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <MoveHorizontal size={11} className="opacity-50 flex-shrink-0" />
+                  <span>Rail: {railPos.toFixed(1)} mm</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Hand size={11} className="opacity-50 flex-shrink-0" />
+                  <span>Grip: {gripperPos}%</span>
+                </div>
               </div>
-              <div className="flex items-center gap-1.5">
-                <RotateCcw size={11} className="opacity-50 flex-shrink-0" />
-                <span>
-                  J4-J6: {jointStates[3].toFixed(1)}° /{" "}
-                  {jointStates[4].toFixed(1)}° / {jointStates[5].toFixed(1)}°
-                </span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <MoveHorizontal size={11} className="opacity-50 flex-shrink-0" />
-                <span>Rail: {railPos.toFixed(1)} mm</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <Hand size={11} className="opacity-50 flex-shrink-0" />
-                <span>Grip: {gripperPos}%</span>
+              {/* Effector pose preview */}
+              <div className="bg-purple-50 rounded-2xl p-3">
+                <p className="text-[10px] font-black text-purple-400 uppercase mb-2">End-Effector Pose</p>
+                <div className="grid grid-cols-3 gap-1.5 text-xs font-mono text-purple-600">
+                  <div><span className="opacity-50">X </span>{effectorPose.x.toFixed(1)}</div>
+                  <div><span className="opacity-50">Y </span>{effectorPose.y.toFixed(1)}</div>
+                  <div><span className="opacity-50">Z </span>{effectorPose.z.toFixed(1)}</div>
+                  <div><span className="opacity-50">R </span>{effectorPose.roll.toFixed(1)}°</div>
+                  <div><span className="opacity-50">P </span>{effectorPose.pitch.toFixed(1)}°</div>
+                  <div><span className="opacity-50">Yw </span>{effectorPose.yaw.toFixed(1)}°</div>
+                </div>
               </div>
             </div>
 

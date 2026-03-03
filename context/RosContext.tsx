@@ -12,12 +12,19 @@ import * as ROSLIB from "roslib";
 export interface CalibrationData {
   offsets: number[];  // [j1, j2, j3, j4, j5, j6, rail, gripper]
   flips: boolean[];   // [j1, j2, j3, j4, j5, j6, rail, gripper]
+  tcpOffset: { x: number; y: number; z: number };  // Tool center point offset in mm
 }
 
 const DEFAULT_CALIBRATION: CalibrationData = {
   offsets: [0, 0, 0, 0, 0, 0, 0, 0],
   flips: [false, false, false, false, false, false, false, false],
+  tcpOffset: { x: 0, y: 0, z: 0 },
 };
+
+export interface EffectorPose {
+  x: number; y: number; z: number;
+  roll: number; pitch: number; yaw: number;
+}
 
 interface RosContextType {
   isConnected: boolean;
@@ -27,6 +34,7 @@ interface RosContextType {
   gripperPos: number;
   safetyStatus: number;
   robotStatus: number;
+  effectorPose: EffectorPose;
   sendJob: (jobData: any) => void;
   sendGotoPosition: (taskData: any) => void;
   setTeachMode: (status: boolean) => void;
@@ -56,6 +64,7 @@ export const RosProvider = ({ children }: { children: React.ReactNode }) => {
   const [gripperPos, setGripperPos] = useState(0);
   const [safetyStatus, setSafetyStatus] = useState(0);
   const [robotStatus, setRobotStatus] = useState(0);
+  const [effectorPose, setEffectorPose] = useState<EffectorPose>({ x: 0, y: 0, z: 0, roll: 0, pitch: 0, yaw: 0 });
   const [isExecuting, setIsExecuting] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [executionStartTime, setExecutionStartTime] = useState<number | null>(
@@ -68,7 +77,12 @@ export const RosProvider = ({ children }: { children: React.ReactNode }) => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("robotCalibration");
       if (saved) {
-        try { return JSON.parse(saved); } catch {}
+        try {
+          const parsed = JSON.parse(saved);
+          // Migrate old calibration data that doesn't have tcpOffset
+          if (!parsed.tcpOffset) parsed.tcpOffset = { x: 0, y: 0, z: 0 };
+          return parsed;
+        } catch {}
       }
     }
     return DEFAULT_CALIBRATION;
@@ -135,6 +149,22 @@ export const RosProvider = ({ children }: { children: React.ReactNode }) => {
         }
       });
 
+      // End-effector pose subscriber (XYZ mm + RPY degrees)
+      const poseSub = new ROSLIB.Topic({
+        ros: rosInstance,
+        name: "/end_effector_pose",
+        messageType: "std_msgs/String",
+      });
+      poseSub.subscribe((m: any) => {
+        try {
+          const p = JSON.parse(m.data);
+          setEffectorPose({
+            x: p.x ?? 0, y: p.y ?? 0, z: p.z ?? 0,
+            roll: p.roll ?? 0, pitch: p.pitch ?? 0, yaw: p.yaw ?? 0,
+          });
+        } catch {}
+      });
+
       // Safety status subscriber
       const safetySub = new ROSLIB.Topic({
         ros: rosInstance,
@@ -167,6 +197,23 @@ export const RosProvider = ({ children }: { children: React.ReactNode }) => {
     connectRos();
     return () => ros?.close();
   }, []);
+
+  // Publish /tool_config whenever TCP offset changes
+  useEffect(() => {
+    if (!ros) return;
+    const topic = new ROSLIB.Topic({
+      ros,
+      name: "/tool_config",
+      messageType: "std_msgs/String",
+    });
+    topic.publish({
+      data: JSON.stringify({
+        tcp_x: calibration.tcpOffset.x,
+        tcp_y: calibration.tcpOffset.y,
+        tcp_z: calibration.tcpOffset.z,
+      }),
+    });
+  }, [calibration.tcpOffset, ros]);
 
   const sendJob = useCallback(
     (jobData: any) => {
@@ -205,6 +252,11 @@ export const RosProvider = ({ children }: { children: React.ReactNode }) => {
         j6: applyInverse(taskData.j6, 5),
         rail: applyInverse(taskData.rail, 6),
         gripper: applyInverse(taskData.gripper, 7),
+        // Effector mode: include Cartesian target for robot IK
+        ...(taskData.controlMode === "effector" && taskData.x != null && {
+          x: taskData.x, y: taskData.y, z: taskData.z,
+          roll: taskData.roll, pitch: taskData.pitch, yaw: taskData.yaw,
+        }),
       };
       const topic = new ROSLIB.Topic({
         ros,
@@ -288,6 +340,7 @@ export const RosProvider = ({ children }: { children: React.ReactNode }) => {
         gripperPos,
         safetyStatus,
         robotStatus,
+        effectorPose,
         sendJob,
         sendGotoPosition,
         setTeachMode,
