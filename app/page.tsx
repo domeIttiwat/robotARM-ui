@@ -1,217 +1,117 @@
 "use client";
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { useRos } from "@/context/RosContext";
-import KioskBoard from "kioskboard";
-import {
-  Play,
-  Plus,
-  ShieldCheck,
-  Activity,
-  Trash2,
-  ArrowLeft,
-  X,
-  Info,
-  LayoutGrid,
-  List,
-} from "lucide-react";
+import JobDetailView from "@/components/JobDetailView";
+import JobEditor from "@/components/JobEditor";
+import RosStatusBadge from "@/components/RosStatusBadge";
+import { Activity, LayoutGrid, List, Home, SlidersHorizontal } from "lucide-react";
+import CalibrationModal from "@/components/CalibrationModal";
 
-const TrainingView = ({ onBack }: { onBack: () => void }) => {
-  const { jointStates, railPos, setTeachMode } = useRos();
-  const [jobName, setJobName] = useState("");
-  const [tasks, setTasks] = useState<any[]>([]);
-  const [keyboardLang, setKeyboardLang] = useState<"en" | "th">("en");
-  const jobNameInputRef = useRef<HTMLInputElement>(null);
+interface Task {
+  id: number;
+  sequence: number;
+  label?: string;
+  j1: number;
+  j2: number;
+  j3: number;
+  j4: number;
+  j5: number;
+  j6: number;
+  rail: number;
+  speed?: number;
+  delay?: number;
+  gripper?: number;
+}
 
-  useEffect(() => {
-    setTeachMode(true);
-    return () => {
-      setTeachMode(false);
-    };
-  }, [setTeachMode]);
+interface Job {
+  id: number;
+  name: string;
+  description?: string;
+  tasks?: Task[];
+  createdAt?: string;
+}
 
-  // Initialize KioskBoard with Thai and English support
-  useEffect(() => {
-    if (jobNameInputRef.current) {
-      const keysArrays = keyboardLang === "th"
-        ? [
-            ["ฟ", "ห", "ก", "ด", "เ", "า", "้", "่", "ป", "ย", "{bksp}"],
-            ["า", "ส", "ี", "ึ", "ุ", "ฺ", "์", "ํ", "ค", "ต"],
-            ["ี", "ร", "น", "ง", "จ", "ข", "ค", "ม", "ว", "{shift}"],
-            ["{accept}", " ", "{space}", "{enter}"]
-          ]
-        : [
-            ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "{bksp}"],
-            ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"],
-            ["a", "s", "d", "f", "g", "h", "j", "k", "l", "{shift}"],
-            ["{accept}", " ", "{space}", "{enter}"]
-          ];
-
-      // Initialize KioskBoard with custom key arrays
-      (KioskBoard as any).init({
-        keysArrays: keysArrays,
-        language: keyboardLang,
-        theme: "light",
-        display: "bottom",
-      });
-
-      // Set data attributes for KioskBoard to detect the input
-      jobNameInputRef.current.setAttribute("data-kioskboard", "true");
-      jobNameInputRef.current.setAttribute("data-kioskboard-type", "text");
+const Dashboard = ({
+  onNew,
+  onSelectJob,
+  autoHome,
+  onToggleAutoHome,
+}: {
+  onNew: () => void;
+  onSelectJob: (job: Job) => void;
+  autoHome: boolean;
+  onToggleAutoHome: () => void;
+}) => {
+  const { jointStates, railPos, gripperPos, isConnected, sendGotoPosition } = useRos();
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [viewMode, setViewMode] = useState<"card" | "list">(() => {
+    if (typeof window !== "undefined") {
+      return (localStorage.getItem("jobsViewMode") as "card" | "list") ?? "card";
     }
-  }, [keyboardLang]);
+    return "card";
+  });
+  const [loading, setLoading] = useState(true);
+  const [showCalibration, setShowCalibration] = useState(false);
 
-  const addPoint = () => {
-    setTasks([
-      ...tasks,
-      {
-        label: `Task ${tasks.length + 1}`,
-        j: [...jointStates],
-        r: railPos,
-      },
-    ]);
+  useEffect(() => {
+    loadJobs();
+  }, []);
+
+  const loadJobs = async () => {
+    try {
+      setLoading(true);
+      const res = await fetch("/api/jobs");
+      const data = await res.json();
+      if (data.success) {
+        setJobs(data.jobs);
+      }
+    } catch (error) {
+      console.error("Error loading jobs:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleViewMode = (mode: "card" | "list") => {
+    setViewMode(mode);
+    localStorage.setItem("jobsViewMode", mode);
   };
 
   return (
-    <div className="h-screen flex flex-col bg-[#F5F5F7]">
-      <div className="p-6 bg-white border-b flex justify-between items-center sticky top-0 z-50">
-        <button
-          onClick={onBack}
-          className="flex items-center gap-2 text-gray-400 font-bold hover:text-black transition-colors"
-        >
-          <ArrowLeft size={24} /> Back
-        </button>
-        <div className="flex gap-4">
-          <button className="px-8 py-3 rounded-[24px] border border-gray-300 font-bold">
-            Dry Run
-          </button>
-          <button className="px-10 py-3 rounded-full bg-black text-white font-bold">
-            Save Job
-          </button>
-        </div>
-      </div>
-      <div className="flex-1 flex overflow-hidden">
-        <div className="w-80 p-8 border-r bg-white space-y-8 overflow-y-auto">
-          <h2 className="text-3xl font-black tracking-tight">New Job</h2>
-
-          {/* Keyboard Language Toggle */}
-          <div className="flex gap-2 bg-gray-100 rounded-full p-1">
-            <button
-              onClick={() => setKeyboardLang("en")}
-              className={`flex-1 px-3 py-2 rounded-full text-xs font-semibold transition-all ${
-                keyboardLang === "en"
-                  ? "bg-white text-black shadow-sm"
-                  : "text-gray-500 hover:text-gray-700"
-              }`}
-            >
-              English
-            </button>
-            <button
-              onClick={() => setKeyboardLang("th")}
-              className={`flex-1 px-3 py-2 rounded-full text-xs font-semibold transition-all ${
-                keyboardLang === "th"
-                  ? "bg-white text-black shadow-sm"
-                  : "text-gray-500 hover:text-gray-700"
-              }`}
-            >
-              ไทย
-            </button>
-          </div>
-
-          {/* Job Name Input */}
-          <input
-            ref={jobNameInputRef}
-            type="text"
-            value={jobName}
-            onChange={(e) => setJobName(e.target.value)}
-            placeholder="Name..."
-            className="w-full p-5 bg-gray-50 border-2 border-transparent rounded-[28px] text-xl font-bold placeholder-gray-300 focus:outline-none focus:border-blue-400 transition-colors"
-            data-kioskboard="true"
-          />
-          <div className="p-6 bg-blue-50 text-blue-700 rounded-[30px] text-sm font-medium border border-blue-100">
-            <div className="flex items-center gap-2 mb-2 font-bold">
-              <Info size={18} /> Teaching Active
-            </div>
-            ลากปลายหุ่นไปยังจุดที่ต้องการ แล้วกดปุ่ม "Capture Position"
-          </div>
-        </div>
-        <div className="flex-1 p-10 overflow-y-auto bg-gray-50/50">
-          <div className="flex justify-between items-end mb-10">
-            <h2 className="text-4xl font-black tracking-tight">Timeline</h2>
-            <button
-              onClick={addPoint}
-              className="apple-btn bg-blue-600 text-white flex items-center gap-3 shadow-lg"
-            >
-              <Plus size={24} /> Capture Position
-            </button>
-          </div>
-          <div className="space-y-4">
-            {tasks.map((t, idx) => (
-              <div key={idx} className="tesla-card p-6 flex items-center gap-6">
-                <div className="w-12 h-12 bg-gray-100 rounded-[18px] flex items-center justify-center font-black text-gray-400">
-                  {idx + 1}
-                </div>
-                <div className="flex-1 font-bold text-2xl text-[#1D1D1F]">
-                  {t.label}
-                </div>
-                <div className="text-xs font-mono font-bold text-gray-400 uppercase">
-                  J: {t.j.map((v: any) => v.toFixed(0)).join(", ")} | R:{" "}
-                  {t.r.toFixed(0)}mm
-                </div>
-                <button className="p-3 text-gray-300 hover:text-red-500">
-                  <Trash2 size={24} />
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const Dashboard = ({ onNew }: { onNew: () => void }) => {
-  const { isConnected, safetyStatus, jointStates, railPos } = useRos();
-  const [selected, setSelected] = useState<any>(null);
-  const [viewMode, setViewMode] = useState<"card" | "list">("card");
-
-  const status =
-    safetyStatus === 1
-      ? { label: "เตือน: ลดความเร็ว", color: "bg-orange-500" }
-      : safetyStatus === 2
-        ? { label: "หยุดฉุกเฉิน!", color: "bg-red-500 animate-pulse" }
-        : { label: "สถานะ: ปกติ", color: "bg-emerald-500" };
-
-  return (
     <div className="h-screen p-10 flex flex-col gap-10 bg-[#F5F5F7]">
-      <header className="flex justify-between items-end">
+      <header className="flex justify-between items-center">
         <div>
           <h1 className="text-6xl font-black tracking-tight">
             FIBO ROBOT CAFE <span className="text-blue-600">STUDIO</span>
           </h1>
-          <div className="flex items-center gap-3 mt-4">
-            <div
-              className={`w-3 h-3 rounded-full ${isConnected ? "bg-green-500" : "bg-red-500 animate-pulse"}`}
-            />
-            <span className="text-sm font-bold text-gray-400 uppercase">
-              {isConnected ? "System Ready" : "Connecting..."}
-            </span>
-          </div>
         </div>
-        <div
-          className={`px-10 py-6 rounded-full text-white font-black text-xl flex items-center gap-5 shadow-2xl ${status.color}`}
-        >
-          <ShieldCheck size={36} /> {status.label}
+        <div className="flex items-center gap-4">
+          <RosStatusBadge />
+          <button
+            onClick={() => sendGotoPosition({ sequence: 0, label: "Home", j1: 0, j2: 0, j3: 0, j4: 0, j5: 0, j6: 0, rail: 0, speed: 20, gripper: 0 })}
+            className="flex items-center gap-3 px-8 py-5 bg-black hover:bg-gray-800 active:bg-gray-900 text-white rounded-2xl transition-colors font-black text-lg shadow-lg"
+            title="ส่งหุ่นยนต์กลับตำแหน่ง Home"
+          >
+            <Home size={26} /> Home
+          </button>
         </div>
       </header>
 
       <div className="flex-1 grid grid-cols-12 gap-10 overflow-hidden">
         <section className="col-span-8 tesla-card p-12 flex flex-col overflow-hidden">
           <div className="flex justify-between items-center mb-10">
-            <h2 className="text-4xl font-bold">Project Library</h2>
+            <div>
+              <h2 className="text-4xl font-bold">Project Library</h2>
+              {!loading && (
+                <p className="text-sm text-gray-400 font-bold mt-1">
+                  {jobs.length} {jobs.length === 1 ? "job" : "jobs"}
+                </p>
+              )}
+            </div>
             <div className="flex items-center gap-4">
               <div className="flex gap-2 bg-gray-100 rounded-full p-1">
                 <button
-                  onClick={() => setViewMode("card")}
+                  onClick={() => handleViewMode("card")}
                   className={`px-4 py-2 rounded-full transition-all ${
                     viewMode === "card"
                       ? "bg-white text-black shadow-sm"
@@ -221,7 +121,7 @@ const Dashboard = ({ onNew }: { onNew: () => void }) => {
                   <LayoutGrid size={20} />
                 </button>
                 <button
-                  onClick={() => setViewMode("list")}
+                  onClick={() => handleViewMode("list")}
                   className={`px-4 py-2 rounded-full transition-all ${
                     viewMode === "list"
                       ? "bg-white text-black shadow-sm"
@@ -239,55 +139,52 @@ const Dashboard = ({ onNew }: { onNew: () => void }) => {
               </button>
             </div>
           </div>
-          {viewMode === "card" ? (
+
+          {loading ? (
+            <div className="flex items-center justify-center flex-1">
+              <p className="text-gray-400 text-xl">Loading jobs...</p>
+            </div>
+          ) : jobs.length === 0 ? (
+            <div className="flex items-center justify-center flex-1">
+              <p className="text-gray-400 text-xl">No jobs yet. Create one!</p>
+            </div>
+          ) : viewMode === "card" ? (
             <div className="grid grid-cols-2 gap-8 overflow-y-auto pr-4">
-              {[1, 2].map((id) => (
+              {jobs.map((job) => (
                 <div
-                  key={id}
-                  onClick={() =>
-                    setSelected({
-                      id,
-                      name: "Job " + id,
-                      description: "Description here",
-                    })
-                  }
+                  key={job.id}
+                  onClick={() => onSelectJob(job)}
                   className="p-10 bg-gray-50 rounded-[48px] border-2 border-transparent hover:border-blue-400 cursor-pointer transition-all"
                 >
                   <div className="w-16 h-16 bg-white rounded-3xl shadow-sm flex items-center justify-center mb-8">
                     <Activity size={32} />
                   </div>
-                  <h3 className="text-3xl font-black mb-3">Job {id}</h3>
-                  <p className="text-gray-400 text-xl font-medium">
-                    คลิกเพื่อดูรายละเอียด
+                  <h3 className="text-3xl font-black mb-3">{job.name}</h3>
+                  <p className="text-gray-400 text-sm mb-3">
+                    {job.description || "No description"}
+                  </p>
+                  <p className="text-xs text-gray-400 font-mono">
+                    {job.tasks?.length || 0} tasks
                   </p>
                 </div>
               ))}
             </div>
           ) : (
             <div className="space-y-3 overflow-y-auto pr-4">
-              {[1, 2].map((id) => (
+              {jobs.map((job) => (
                 <div
-                  key={id}
-                  onClick={() =>
-                    setSelected({
-                      id,
-                      name: "Job " + id,
-                      description: "Description here",
-                    })
-                  }
+                  key={job.id}
+                  onClick={() => onSelectJob(job)}
                   className="flex items-center gap-6 p-6 bg-gray-50 rounded-[28px] border-2 border-transparent hover:border-blue-400 cursor-pointer transition-all"
                 >
                   <div className="w-14 h-14 bg-white rounded-[20px] shadow-sm flex items-center justify-center flex-shrink-0">
                     <Activity size={28} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h3 className="text-2xl font-black">Job {id}</h3>
+                    <h3 className="text-2xl font-black">{job.name}</h3>
                     <p className="text-gray-400 text-sm font-medium">
-                      คลิกเพื่อดูรายละเอียด
+                      {job.tasks?.length || 0} tasks
                     </p>
-                  </div>
-                  <div className="text-xs text-gray-400 font-mono flex-shrink-0">
-                    Created • 2 hours ago
                   </div>
                 </div>
               ))}
@@ -295,78 +192,153 @@ const Dashboard = ({ onNew }: { onNew: () => void }) => {
           )}
         </section>
 
-        <section className="col-span-4 flex flex-col gap-10">
+        <section className="col-span-4 flex flex-col gap-6">
+          {/* Auto-Home Toggle */}
+          <button
+            onClick={onToggleAutoHome}
+            className={`tesla-card p-6 flex items-center gap-4 text-left transition-all active:scale-[0.98] ${
+              autoHome ? "border-2 border-blue-500 bg-blue-50/60" : "border-2 border-transparent"
+            }`}
+          >
+            {/* Toggle switch */}
+            <div className={`relative w-14 h-8 rounded-full transition-colors shrink-0 ${autoHome ? "bg-blue-500" : "bg-gray-200"}`}>
+              <div className={`absolute top-1 w-6 h-6 rounded-full bg-white shadow-md transition-all duration-200 ${autoHome ? "left-7" : "left-1"}`} />
+            </div>
+            <div className="min-w-0">
+              <p className={`font-black text-base leading-tight ${autoHome ? "text-blue-700" : "text-gray-700"}`}>
+                กลับ Home อัตโนมัติ
+              </p>
+              <p className="text-xs text-gray-400 mt-0.5">
+                {autoHome ? "เมื่อเสร็จงาน หุ่นจะกลับ Home ก่อน" : "ปิดอยู่ — หุ่นหยุดตรงจุดสุดท้าย"}
+              </p>
+            </div>
+            <Home size={22} className={`shrink-0 ml-auto ${autoHome ? "text-blue-500" : "text-gray-300"}`} />
+          </button>
+
+          {/* Calibration Button */}
+          <button
+            onClick={() => setShowCalibration(true)}
+            className="tesla-card p-6 flex items-center gap-4 text-left transition-all active:scale-[0.98] border-2 border-transparent hover:border-gray-200"
+          >
+            <div className="w-10 h-10 rounded-[16px] bg-gray-100 flex items-center justify-center shrink-0">
+              <SlidersHorizontal size={18} className="text-gray-600" />
+            </div>
+            <div className="min-w-0">
+              <p className="font-black text-base leading-tight text-gray-700">Calibrate</p>
+              <p className="text-xs text-gray-400 mt-0.5">Offset & Flip แต่ละแกน</p>
+            </div>
+          </button>
+
+          {showCalibration && <CalibrationModal onClose={() => setShowCalibration(false)} />}
+
           <div className="tesla-card p-10 flex-1 flex flex-col">
             <h3 className="text-xs font-black text-gray-400 uppercase mb-10 flex items-center gap-3">
-              <div className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-ping" />{" "}
+              <div className={`w-2.5 h-2.5 rounded-full ${isConnected ? "bg-blue-500 animate-ping" : "bg-gray-300"}`} />
               Real-time Data
             </h3>
-            <div className="grid grid-cols-2 gap-6 flex-1">
-              {jointStates.map((v, i) => (
-                <div
-                  key={i}
-                  className="p-6 bg-gray-50 rounded-[28px] border border-gray-100/50"
-                >
-                  <span className="text-[10px] font-black text-gray-400 block mb-2 uppercase">
-                    Axis {i + 1}
+            {isConnected ? (
+              <div className="grid grid-cols-2 gap-6 flex-1">
+                {jointStates.map((v, i) => (
+                  <div
+                    key={i}
+                    className="p-6 bg-gray-50 rounded-[28px] border border-gray-100/50"
+                  >
+                    <span className="text-[10px] font-black text-gray-400 block mb-2 uppercase">
+                      Axis {i + 1}
+                    </span>
+                    <span className="text-2xl font-mono font-black">
+                      {v.toFixed(1)}°
+                    </span>
+                  </div>
+                ))}
+                <div className="p-8 bg-blue-600 rounded-[40px] text-white shadow-xl">
+                  <span className="text-[10px] font-black opacity-60 block mb-3 uppercase">
+                    Linear Rail
                   </span>
-                  <span className="text-2xl font-mono font-black">
-                    {v.toFixed(1)}°
+                  <span className="text-4xl font-mono font-black">
+                    {railPos.toFixed(1)}{" "}
+                    <span className="text-xl font-light opacity-50">mm</span>
                   </span>
                 </div>
-              ))}
-              <div className="col-span-2 p-10 bg-blue-600 rounded-[40px] text-white shadow-xl">
-                <span className="text-[10px] font-black opacity-60 block mb-3 uppercase">
-                  Linear Rail
-                </span>
-                <span className="text-6xl font-mono font-black">
-                  {railPos.toFixed(1)}{" "}
-                  <span className="text-2xl font-light opacity-50">mm</span>
-                </span>
+                <div className="p-8 bg-orange-500 rounded-[40px] text-white shadow-xl">
+                  <span className="text-[10px] font-black opacity-60 block mb-3 uppercase">
+                    Gripper
+                  </span>
+                  <span className="text-4xl font-mono font-black">
+                    {gripperPos.toFixed(0)}{" "}
+                    <span className="text-xl font-light opacity-50">%</span>
+                  </span>
+                  <div className="mt-3 w-full h-2 bg-white/20 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-white rounded-full transition-all duration-300"
+                      style={{ width: `${gripperPos}%` }}
+                    />
+                  </div>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center">
+                <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center">
+                  <Activity size={28} className="text-gray-300" />
+                </div>
+                <p className="text-gray-400 text-sm font-bold">ยังไม่ได้เชื่อมต่อ</p>
+                <p className="text-gray-300 text-xs">กำลังรอ ROS Bridge<br/>ws://localhost:9090</p>
+              </div>
+            )}
           </div>
-          <button className="h-40 bg-[#0071E3] rounded-full text-white flex items-center justify-center gap-8 shadow-2xl active:scale-95 transition-all">
-            <Play size={44} fill="white" />
-            <span className="text-5xl font-black uppercase">เริ่มทำงาน</span>
-          </button>
         </section>
       </div>
-
-      {selected && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-2xl flex items-center justify-center z-[200] p-12">
-          <div className="bg-white p-20 rounded-[60px] max-w-3xl w-full relative shadow-2xl animate-splash">
-            <button
-              onClick={() => setSelected(null)}
-              className="absolute top-16 right-16 p-4 hover:bg-gray-100 rounded-full"
-            >
-              <X size={40} />
-            </button>
-            <h2 className="text-6xl font-black mb-10">{selected.name}</h2>
-            <p className="text-gray-400 text-2xl font-medium mb-16">
-              ยืนยันการเริ่มทำงานหุ่นยนต์ตามลำดับ Task
-            </p>
-            <button
-              onClick={() => setSelected(null)}
-              className="w-full h-28 bg-[#0071E3] text-white rounded-full text-4xl font-black shadow-2xl"
-            >
-              Confirm & Run
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
 
 export default function App() {
   const [load, setLoad] = useState(true);
-  const [view, setView] = useState<"dash" | "train">("dash");
+  const [view, setView] = useState<"dash" | "create" | "detail">("dash");
+  const [selectedJob, setSelectedJob] = useState<Job | null>(null);
+  const [dashKey, setDashKey] = useState(0);
+  const [autoHome, setAutoHome] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("autoHome") === "true";
+    }
+    return false;
+  });
+
+  const toggleAutoHome = () => {
+    setAutoHome((prev) => {
+      const next = !prev;
+      localStorage.setItem("autoHome", String(next));
+      return next;
+    });
+  };
 
   useEffect(() => {
     const timer = setTimeout(() => setLoad(false), 2000);
     return () => clearTimeout(timer);
   }, []);
+
+  const handleSelectJob = async (job: Job) => {
+    try {
+      const res = await fetch(`/api/jobs/${job.id}`);
+      const data = await res.json();
+      if (data.success) {
+        setSelectedJob(data.job);
+      }
+    } catch {
+      setSelectedJob(job);
+    }
+    setView("detail");
+  };
+
+  const handleBackToDash = () => {
+    setView("dash");
+    setSelectedJob(null);
+    setDashKey((k) => k + 1);
+  };
+
+  const handleJobSave = () => {
+    handleBackToDash();
+  };
 
   return (
     <div className="antialiased min-h-screen bg-[#F5F5F7]">
@@ -385,9 +357,17 @@ export default function App() {
       ) : (
         <div className="w-full h-full animate-splash">
           {view === "dash" ? (
-            <Dashboard onNew={() => setView("train")} />
+            <Dashboard key={dashKey} onNew={() => setView("create")} onSelectJob={handleSelectJob} autoHome={autoHome} onToggleAutoHome={toggleAutoHome} />
+          ) : view === "detail" && selectedJob ? (
+            <JobDetailView
+              job={selectedJob}
+              onBack={handleBackToDash}
+              onUpdate={handleBackToDash}
+              autoStart={true}
+              autoHomeOnComplete={autoHome}
+            />
           ) : (
-            <TrainingView onBack={() => setView("dash")} />
+            <JobEditor mode="create" onSave={handleJobSave} onCancel={handleBackToDash} />
           )}
         </div>
       )}

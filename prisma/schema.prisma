@@ -35,7 +35,7 @@ model Task {
   // Settings
   speed     Int      @default(50)
   delay     Int      @default(0)
-  gripper   Boolean  @default(false)
+  gripper   Int      @default(0)
 
   createdAt DateTime @default(now())
 }

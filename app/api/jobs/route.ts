@@ -4,7 +4,9 @@ import { NextResponse } from "next/server";
 export async function GET() {
   try {
     // ลองอ่านจำนวน jobs
-    const jobs = await prisma.job.findMany();
+    const jobs = await prisma.job.findMany({
+      include: { tasks: { orderBy: { sequence: "asc" } } },
+    });
 
     return NextResponse.json({
       success: true,
