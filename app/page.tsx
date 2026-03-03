@@ -4,7 +4,7 @@ import { useRos } from "@/context/RosContext";
 import JobDetailView from "@/components/JobDetailView";
 import JobEditor from "@/components/JobEditor";
 import RosStatusBadge from "@/components/RosStatusBadge";
-import { Activity, LayoutGrid, List, Home, SlidersHorizontal } from "lucide-react";
+import { Activity, LayoutGrid, List, Home, SlidersHorizontal, Pencil } from "lucide-react";
 import CalibrationModal from "@/components/CalibrationModal";
 
 interface Task {
@@ -34,11 +34,13 @@ interface Job {
 const Dashboard = ({
   onNew,
   onSelectJob,
+  onEditJob,
   autoHome,
   onToggleAutoHome,
 }: {
   onNew: () => void;
   onSelectJob: (job: Job) => void;
+  onEditJob: (job: Job) => void;
   autoHome: boolean;
   onToggleAutoHome: () => void;
 }) => {
@@ -154,7 +156,7 @@ const Dashboard = ({
                 <div
                   key={job.id}
                   onClick={() => onSelectJob(job)}
-                  className="p-10 bg-gray-50 rounded-[48px] border-2 border-transparent hover:border-blue-400 cursor-pointer transition-all"
+                  className="relative p-10 bg-gray-50 rounded-[48px] border-2 border-transparent hover:border-blue-400 cursor-pointer transition-all"
                 >
                   <div className="w-16 h-16 bg-white rounded-3xl shadow-sm flex items-center justify-center mb-8">
                     <Activity size={32} />
@@ -166,6 +168,13 @@ const Dashboard = ({
                   <p className="text-xs text-gray-400 font-mono">
                     {job.tasks?.length || 0} tasks
                   </p>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onEditJob(job); }}
+                    className="absolute bottom-6 right-6 p-2.5 rounded-2xl bg-white/80 hover:bg-white text-gray-300 hover:text-gray-600 shadow-sm transition-all"
+                    title="Edit job"
+                  >
+                    <Pencil size={16} />
+                  </button>
                 </div>
               ))}
             </div>
@@ -186,6 +195,13 @@ const Dashboard = ({
                       {job.tasks?.length || 0} tasks
                     </p>
                   </div>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onEditJob(job); }}
+                    className="p-2.5 rounded-2xl bg-gray-100 hover:bg-gray-200 text-gray-300 hover:text-gray-600 shrink-0 transition-all"
+                    title="Edit job"
+                  >
+                    <Pencil size={16} />
+                  </button>
                 </div>
               ))}
             </div>
@@ -294,7 +310,7 @@ const Dashboard = ({
 
 export default function App() {
   const [load, setLoad] = useState(true);
-  const [view, setView] = useState<"dash" | "create" | "detail">("dash");
+  const [view, setView] = useState<"dash" | "create" | "edit" | "detail">("dash");
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [dashKey, setDashKey] = useState(0);
   const [autoHome, setAutoHome] = useState(() => {
@@ -336,6 +352,17 @@ export default function App() {
     setDashKey((k) => k + 1);
   };
 
+  const handleEditJob = async (job: Job) => {
+    try {
+      const res = await fetch(`/api/jobs/${job.id}`);
+      const data = await res.json();
+      setSelectedJob(data.success ? data.job : job);
+    } catch {
+      setSelectedJob(job);
+    }
+    setView("edit");
+  };
+
   const handleJobSave = () => {
     handleBackToDash();
   };
@@ -357,7 +384,9 @@ export default function App() {
       ) : (
         <div className="w-full h-full animate-splash">
           {view === "dash" ? (
-            <Dashboard key={dashKey} onNew={() => setView("create")} onSelectJob={handleSelectJob} autoHome={autoHome} onToggleAutoHome={toggleAutoHome} />
+            <Dashboard key={dashKey} onNew={() => setView("create")} onSelectJob={handleSelectJob} onEditJob={handleEditJob} autoHome={autoHome} onToggleAutoHome={toggleAutoHome} />
+          ) : view === "edit" && selectedJob ? (
+            <JobEditor mode="edit" job={selectedJob} onSave={handleJobSave} onCancel={handleBackToDash} />
           ) : view === "detail" && selectedJob ? (
             <JobDetailView
               job={selectedJob}
