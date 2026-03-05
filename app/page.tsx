@@ -1,12 +1,17 @@
 "use client";
 import React, { useState, useEffect } from "react";
+import dynamic from "next/dynamic";
 import { useRos } from "@/context/RosContext";
+import { useViewerFlips } from "@/hooks/useViewerFlips";
 import JobDetailView from "@/components/JobDetailView";
 import JobEditor from "@/components/JobEditor";
 import RosStatusBadge from "@/components/RosStatusBadge";
 import { Activity, LayoutGrid, List, Home, SlidersHorizontal, Pencil, Gamepad2, Settings2 } from "lucide-react";
 import CalibrationModal from "@/components/CalibrationModal";
 import JogControlPanel from "@/components/JogControlPanel";
+
+const RobotViewer3D    = dynamic(() => import("@/components/RobotViewer3D"),    { ssr: false });
+const SplashRobotViewer = dynamic(() => import("@/components/SplashRobotViewer"), { ssr: false });
 
 interface Task {
   id: number;
@@ -53,6 +58,7 @@ const Dashboard = ({
   onToggleAutoHome: () => void;
 }) => {
   const { jointStates, railPos, gripperPos, effectorPose, isConnected, sendGotoPosition } = useRos();
+  const { flips } = useViewerFlips();
   const [jobs, setJobs] = useState<Job[]>([]);
   const [viewMode, setViewMode] = useState<"card" | "list">(() => {
     if (typeof window !== "undefined") {
@@ -116,42 +122,47 @@ const Dashboard = ({
       </header>
 
       <div className="flex-1 grid grid-cols-12 gap-10 overflow-hidden">
-        <section className="col-span-8 tesla-card p-12 flex flex-col overflow-hidden">
-          <div className="flex justify-between items-center mb-10">
-            <div>
-              <h2 className="text-4xl font-bold">Project Library</h2>
+        {/* 3D Digital Twin */}
+        <section className="col-span-4 tesla-card overflow-hidden">
+          <RobotViewer3D joints={jointStates} flips={flips} />
+        </section>
+
+        <section className="col-span-4 tesla-card p-8 flex flex-col overflow-hidden">
+          <div className="flex flex-col gap-4 mb-8">
+            <div className="flex justify-between items-center">
+              <h2 className="text-2xl font-bold">Project Library</h2>
               {!loading && (
-                <p className="text-sm text-gray-400 font-bold mt-1">
+                <span className="text-xs text-gray-400 font-bold">
                   {jobs.length} {jobs.length === 1 ? "job" : "jobs"}
-                </p>
+                </span>
               )}
             </div>
-            <div className="flex items-center gap-4">
-              <div className="flex gap-2 bg-gray-100 rounded-full p-1">
+            <div className="flex items-center gap-3">
+              <div className="flex gap-1 bg-gray-100 rounded-full p-1">
                 <button
                   onClick={() => handleViewMode("card")}
-                  className={`px-4 py-2 rounded-full transition-all ${
+                  className={`px-3 py-1.5 rounded-full transition-all ${
                     viewMode === "card"
                       ? "bg-white text-black shadow-sm"
                       : "text-gray-400 hover:text-black"
                   }`}
                 >
-                  <LayoutGrid size={20} />
+                  <LayoutGrid size={16} />
                 </button>
                 <button
                   onClick={() => handleViewMode("list")}
-                  className={`px-4 py-2 rounded-full transition-all ${
+                  className={`px-3 py-1.5 rounded-full transition-all ${
                     viewMode === "list"
                       ? "bg-white text-black shadow-sm"
                       : "text-gray-400 hover:text-black"
                   }`}
                 >
-                  <List size={20} />
+                  <List size={16} />
                 </button>
               </div>
               <button
                 onClick={onNew}
-                className="px-10 py-4 rounded-[24px] bg-black text-white font-black text-xl flex items-center gap-3 shadow-2xl"
+                className="flex-1 py-3 rounded-2xl bg-black text-white font-black text-sm flex items-center justify-center gap-2 shadow-lg whitespace-nowrap"
               >
                 + สร้างงานใหม่
               </button>
@@ -160,25 +171,25 @@ const Dashboard = ({
 
           {loading ? (
             <div className="flex items-center justify-center flex-1">
-              <p className="text-gray-400 text-xl">Loading jobs...</p>
+              <p className="text-gray-400 text-lg">Loading jobs...</p>
             </div>
           ) : jobs.length === 0 ? (
             <div className="flex items-center justify-center flex-1">
-              <p className="text-gray-400 text-xl">No jobs yet. Create one!</p>
+              <p className="text-gray-400 text-lg">No jobs yet. Create one!</p>
             </div>
           ) : viewMode === "card" ? (
-            <div className="grid grid-cols-2 gap-8 overflow-y-auto pr-4">
+            <div className="grid grid-cols-2 gap-5 overflow-y-auto pr-2">
               {jobs.map((job) => (
                 <div
                   key={job.id}
                   onClick={() => onSelectJob(job)}
-                  className="relative p-10 bg-gray-50 rounded-[48px] border-2 border-transparent hover:border-blue-400 cursor-pointer transition-all"
+                  className="relative p-6 bg-gray-50 rounded-4xl border-2 border-transparent hover:border-blue-400 cursor-pointer transition-all"
                 >
-                  <div className="w-16 h-16 bg-white rounded-3xl shadow-sm flex items-center justify-center mb-8">
-                    <Activity size={32} />
+                  <div className="w-12 h-12 bg-white rounded-2xl shadow-sm flex items-center justify-center mb-5">
+                    <Activity size={24} />
                   </div>
-                  <h3 className="text-3xl font-black mb-3">{job.name}</h3>
-                  <p className="text-gray-400 text-sm mb-3">
+                  <h3 className="text-xl font-black mb-2 leading-tight">{job.name}</h3>
+                  <p className="text-gray-400 text-xs mb-2 line-clamp-2">
                     {job.description || "No description"}
                   </p>
                   <p className="text-xs text-gray-400 font-mono">
@@ -186,10 +197,10 @@ const Dashboard = ({
                   </p>
                   <button
                     onClick={(e) => { e.stopPropagation(); onEditJob(job); }}
-                    className="absolute bottom-6 right-6 p-2.5 rounded-2xl bg-white/80 hover:bg-white text-gray-300 hover:text-gray-600 shadow-sm transition-all"
+                    className="absolute bottom-4 right-4 p-2 rounded-xl bg-white/80 hover:bg-white text-gray-300 hover:text-gray-600 shadow-sm transition-all"
                     title="Edit job"
                   >
-                    <Pencil size={16} />
+                    <Pencil size={14} />
                   </button>
                 </div>
               ))}
@@ -357,7 +368,7 @@ export default function App() {
   };
 
   useEffect(() => {
-    const timer = setTimeout(() => setLoad(false), 2000);
+    const timer = setTimeout(() => setLoad(false), 4500);
     return () => clearTimeout(timer);
   }, []);
 
@@ -399,12 +410,17 @@ export default function App() {
     <div className="antialiased min-h-screen bg-[#F5F5F7]">
       {load ? (
         <div className="fixed inset-0 bg-black flex flex-col items-center justify-center z-[300]">
-          <div className="flex flex-col items-center animate-splash">
-            <h1 className="text-white text-7xl font-light tracking-[0.3em] uppercase text-center">
+          {/* 3D rotating model as background */}
+          <SplashRobotViewer />
+          {/* Gradient vignette so text stays readable */}
+          <div className="absolute inset-0 bg-radial-[ellipse_60%_60%_at_50%_50%] from-transparent to-black/80 pointer-events-none" />
+          {/* Logo overlay */}
+          <div className="relative z-10 flex flex-col items-center animate-splash">
+            <h1 className="text-white text-7xl font-light tracking-[0.3em] uppercase text-center drop-shadow-2xl">
               FIBO ROBOT <span className="font-black text-[#0071E3]">CAFE</span>
             </h1>
             <div className="h-[1px] bg-gradient-to-r from-transparent via-[#0071E3] to-transparent mt-12 w-96 animate-line" />
-            <p className="text-gray-600 mt-12 font-mono text-xs">
+            <p className="text-gray-500 mt-12 font-mono text-xs tracking-widest">
               SYSTEM INITIALIZING...
             </p>
           </div>
