@@ -4,8 +4,9 @@ import { useRos } from "@/context/RosContext";
 import JobDetailView from "@/components/JobDetailView";
 import JobEditor from "@/components/JobEditor";
 import RosStatusBadge from "@/components/RosStatusBadge";
-import { Activity, LayoutGrid, List, Home, SlidersHorizontal, Pencil } from "lucide-react";
+import { Activity, LayoutGrid, List, Home, SlidersHorizontal, Pencil, Gamepad2 } from "lucide-react";
 import CalibrationModal from "@/components/CalibrationModal";
+import JogControlPanel from "@/components/JogControlPanel";
 
 interface Task {
   id: number;
@@ -61,6 +62,7 @@ const Dashboard = ({
   });
   const [loading, setLoading] = useState(true);
   const [showCalibration, setShowCalibration] = useState(false);
+  const [showJog, setShowJog] = useState(false);
 
   useEffect(() => {
     loadJobs();
@@ -238,26 +240,34 @@ const Dashboard = ({
             <Home size={22} className={`shrink-0 ml-auto ${autoHome ? "text-blue-500" : "text-gray-300"}`} />
           </button>
 
-          {/* Calibration Button */}
+          {/* Jog Button */}
           <button
-            onClick={() => setShowCalibration(true)}
+            onClick={() => setShowJog(true)}
             className="tesla-card p-6 flex items-center gap-4 text-left transition-all active:scale-[0.98] border-2 border-transparent hover:border-gray-200"
           >
             <div className="w-10 h-10 rounded-[16px] bg-gray-100 flex items-center justify-center shrink-0">
-              <SlidersHorizontal size={18} className="text-gray-600" />
+              <Gamepad2 size={18} className="text-gray-600" />
             </div>
             <div className="min-w-0">
-              <p className="font-black text-base leading-tight text-gray-700">Calibrate</p>
-              <p className="text-xs text-gray-400 mt-0.5">Offset & Flip แต่ละแกน</p>
+              <p className="font-black text-base leading-tight text-gray-700">Jog</p>
+              <p className="text-xs text-gray-400 mt-0.5">ควบคุมด้วยมือ</p>
             </div>
           </button>
 
           {showCalibration && <CalibrationModal onClose={() => setShowCalibration(false)} />}
+          {showJog && <JogControlPanel onClose={() => setShowJog(false)} />}
 
           <div className="tesla-card p-10 flex-1 flex flex-col">
             <h3 className="text-xs font-black text-gray-400 uppercase mb-10 flex items-center gap-3">
               <div className={`w-2.5 h-2.5 rounded-full ${isConnected ? "bg-blue-500 animate-ping" : "bg-gray-300"}`} />
               Real-time Data
+              <button
+                onClick={() => setShowCalibration(true)}
+                className="ml-auto w-8 h-8 rounded-xl bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors"
+                title="Calibrate"
+              >
+                <SlidersHorizontal size={14} className="text-gray-500" />
+              </button>
             </h3>
             {isConnected ? (
               <div className="flex flex-col gap-4 flex-1 overflow-y-auto">

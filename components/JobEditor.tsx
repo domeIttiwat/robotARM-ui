@@ -25,8 +25,10 @@ import {
   Download,
   CheckCircle2,
   AlertCircle,
+  Gamepad2,
 } from "lucide-react";
 import RosStatusBadge from "@/components/RosStatusBadge";
+import JogControlPanel from "@/components/JogControlPanel";
 import {
   DndContext,
   closestCenter,
@@ -406,6 +408,7 @@ export default function JobEditor({
   const [captureLabel, setCaptureLabel] = useState("");
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
   const [dryRunIdx, setDryRunIdx] = useState(-1);
+  const [showJog, setShowJog] = useState(false);
   const [dryRunDelayMs, setDryRunDelayMs] = useState<number | null>(null);
   const dryRunDelayTotalRef = useRef(0);
   const [taskJsonIdx, setTaskJsonIdx] = useState<number | null>(null);
@@ -784,6 +787,17 @@ export default function JobEditor({
           >
             + Capture Position
           </button>
+
+          <button
+            onClick={() => setShowJog(true)}
+            className="w-full flex items-center gap-3 px-6 py-4 rounded-2xl bg-gray-50 hover:bg-gray-100 border-2 border-transparent hover:border-gray-200 transition-all active:scale-[0.98]"
+          >
+            <Gamepad2 size={18} className="text-gray-500 shrink-0" />
+            <div className="text-left">
+              <p className="font-black text-sm leading-tight text-gray-700">Jog</p>
+              <p className="text-xs text-gray-400">ควบคุมด้วยมือ</p>
+            </div>
+          </button>
         </div>
 
         {/* Right Panel — Sortable Timeline */}
@@ -1043,6 +1057,8 @@ export default function JobEditor({
           </div>
         </div>
       )}
+
+      {showJog && <JogControlPanel onClose={() => setShowJog(false)} />}
     </div>
   );
 }

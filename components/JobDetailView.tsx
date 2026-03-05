@@ -23,7 +23,9 @@ import {
   Copy,
   Check,
   Download,
+  Gamepad2,
 } from "lucide-react";
+import JogControlPanel from "@/components/JogControlPanel";
 
 interface Task {
   id: number;
@@ -154,6 +156,7 @@ export default function JobDetailView({ job, onBack, onUpdate, autoStart = false
   const [isDeleting, setIsDeleting] = useState(false);
   const [taskElapsedMs, setTaskElapsedMs] = useState(0);
   const [showJson, setShowJson] = useState(false);
+  const [showJog, setShowJog] = useState(false);
   const [copied, setCopied] = useState(false);
 
   const [showCompletionModal, setShowCompletionModal] = useState(false);
@@ -544,6 +547,16 @@ export default function JobDetailView({ job, onBack, onUpdate, autoStart = false
                 </button>
               </>
             )}
+
+            {/* Jog — always visible */}
+            <button
+              onClick={() => setShowJog(true)}
+              className="flex items-center gap-2 px-5 py-3 bg-gray-100 hover:bg-gray-200 active:bg-gray-300 text-gray-700 rounded-2xl transition-colors font-bold"
+              title="Jog — ควบคุมด้วยมือ"
+            >
+              <Gamepad2 size={18} />
+              <span>Jog</span>
+            </button>
 
             {/* Home — always visible, large touch target */}
             <button
@@ -999,6 +1012,8 @@ export default function JobDetailView({ job, onBack, onUpdate, autoStart = false
           </div>
         </div>
       )}
+
+      {showJog && <JogControlPanel onClose={() => setShowJog(false)} />}
     </div>
   );
 }
