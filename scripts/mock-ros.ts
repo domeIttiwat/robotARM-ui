@@ -24,28 +24,36 @@ const subscribers = new Map<string, Set<WebSocket>>();
 let clientCounter = 0;
 const clientIds = new WeakMap<WebSocket, number>();
 
-// Whether any client is publishing /joint_states (IK simulator connected)
+// Whether any client is publishing /joint_states (real simulator connected)
 let hasJointPublisher = false;
+let jointPublisherWs: WebSocket | null = null; // track exact client so we only reset on its disconnect
 let autoPublishTimer: NodeJS.Timeout | null = null;
 
-// Simulate machine_state after a /goto_position command
+// Simulate machine_state + robot_status after a /goto_position command
+// (only used when no real publisher is connected)
 let machineStateTimer: NodeJS.Timeout | null = null;
+let robotStatusTimer: NodeJS.Timeout | null = null;
 
-function publishMachineState(state: number) {
-  const subs = subscribers.get("/machine_state");
+function publishTopic(topic: string, data: number) {
+  const subs = subscribers.get(topic);
   if (!subs || subs.size === 0) return;
-  const payload = JSON.stringify({ op: "publish", topic: "/machine_state", msg: { data: state } });
+  const payload = JSON.stringify({ op: "publish", topic, msg: { data } });
   subs.forEach((sub) => { if (sub.readyState === 1) sub.send(payload); });
-  console.log(`[AUTO] /machine_state → ${state}`);
+  console.log(`[AUTO] ${topic} → ${data}`);
 }
 
 function simulateMachineState() {
   if (machineStateTimer) clearTimeout(machineStateTimer);
-  // After ~1.5s, report "reached" (state=2), then reset to idle (state=0)
   machineStateTimer = setTimeout(() => {
-    publishMachineState(2); // reached
-    machineStateTimer = setTimeout(() => publishMachineState(0), 200);
+    publishTopic("/machine_state", 2); // reached
+    machineStateTimer = setTimeout(() => publishTopic("/machine_state", 0), 200);
   }, 1500);
+}
+
+function simulateRobotStatus() {
+  if (robotStatusTimer) clearTimeout(robotStatusTimer);
+  publishTopic("/robot_status", 1); // moving
+  robotStatusTimer = setTimeout(() => publishTopic("/robot_status", 0), 1500); // idle
 }
 
 const wss = new WebSocketServer({ port: PORT });
@@ -80,28 +88,40 @@ wss.on("connection", (ws: WebSocket) => {
           `(${subscribers.get(topic)!.size} subs)`
       );
 
-      // Once UI subscribes to /joint_states or /end_effector_pose, start auto-publish if no IK sim
+      // Once UI subscribes to /joint_states or /end_effector_pose, start auto-publish if no real sim
       if (topic === "/joint_states" || topic === "/end_effector_pose") {
         startAutoPublish();
       }
-      // Send initial idle state when UI subscribes to /machine_state
+      // Send initial idle states when UI subscribes
       if (topic === "/machine_state") {
-        setTimeout(() => publishMachineState(0), 100);
+        setTimeout(() => publishTopic("/machine_state", 0), 100);
+      }
+      if (topic === "/robot_status") {
+        setTimeout(() => publishTopic("/robot_status", 0), 100);
+      }
+      if (topic === "/safety_status") {
+        setTimeout(() => publishTopic("/safety_status", 0), 100);
       }
     } else if (op === "publish") {
       const subs = subscribers.get(topic);
       const count = subs ? subs.size : 0;
       console.log(`[PUB] Client #${id} → ${topic}  (${count} receivers)`);
 
-      // If IK simulator is publishing joint states, stop auto-publish
+      // If real simulator is publishing joint states, track it and stop auto-publish
       if (topic === "/joint_states") {
-        hasJointPublisher = true;
-        stopAutoPublish();
+        if (!hasJointPublisher) {
+          hasJointPublisher = true;
+          jointPublisherWs = ws;
+          stopAutoPublish();
+          console.log(`[SIM] Real joint publisher detected (Client #${clientIds.get(ws)})`);
+        }
       }
 
-      // Simulate machine_state when UI sends a goto_position command
-      if (topic === "/goto_position") {
+      // Simulate machine_state + robot_status ONLY when no real publisher connected
+      // (when real sim is connected, it sends these signals itself)
+      if (topic === "/goto_position" && !hasJointPublisher) {
         simulateMachineState();
+        simulateRobotStatus();
       }
 
       // Relay to all subscribers except the sender
@@ -166,14 +186,16 @@ wss.on("connection", (ws: WebSocket) => {
       if (subs.size === 0) subscribers.delete(topic);
     });
 
-    // If no clients left, stop auto-publish and reset publisher flag
-    if (wss.clients.size === 0) {
+    // Only reset publisher state if THE publisher client disconnected
+    if (ws === jointPublisherWs) {
       hasJointPublisher = false;
-      stopAutoPublish();
-    } else if (hasJointPublisher) {
-      // Check if any remaining client was the joint publisher (heuristic: restart auto if needed)
-      hasJointPublisher = false;
+      jointPublisherWs = null;
+      console.log(`[SIM] Real joint publisher disconnected — resuming auto-publish`);
       startAutoPublish();
+    } else if (wss.clients.size === 0) {
+      hasJointPublisher = false;
+      jointPublisherWs = null;
+      stopAutoPublish();
     }
   });
 
