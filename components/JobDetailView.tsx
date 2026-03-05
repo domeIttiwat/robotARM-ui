@@ -134,6 +134,7 @@ export default function JobDetailView({ job, onBack, onUpdate, autoStart = false
   const {
     isConnected,
     robotStatus,
+    machineState,
     stopExecution,
     pauseExecution,
     resumeExecution,
@@ -170,6 +171,7 @@ export default function JobDetailView({ job, onBack, onUpdate, autoStart = false
   const executionCancelRef = useRef(false);
   const userPausedRef = useRef(false); // user's explicit pause/resume — NOT synced from robot
   const robotStatusRef = useRef(0);
+  const machineStateRef = useRef(0);
   const robotWasMovingRef = useRef(false);
   const executionStartMsRef = useRef(0);
   // Keep latest startExecutionFlow in ref to avoid stale closure in countdown effect
@@ -180,6 +182,8 @@ export default function JobDetailView({ job, onBack, onUpdate, autoStart = false
     robotStatusRef.current = robotStatus;
     if (isExecuting && robotStatus !== 0) robotWasMovingRef.current = true;
   }, [robotStatus, isExecuting]);
+
+  useEffect(() => { machineStateRef.current = machineState; }, [machineState]);
 
   const tasks = job.tasks || [];
 
@@ -308,24 +312,36 @@ export default function JobDetailView({ job, onBack, onUpdate, autoStart = false
     }
   };
 
-  // ── wait for robot movement. Returns true if interrupted by Pause (caller should retry task).
-  const waitForRobotMovement = async (task: Task, prevTask?: Task): Promise<boolean> => {
+  // ── wait for robot movement.
+  // Returns: "ok" (done), "interrupted" (paused — caller retries), "singularity" (caller retries as joint).
+  const waitForRobotMovement = async (task: Task, prevTask?: Task): Promise<"ok" | "interrupted" | "singularity"> => {
     const moveMsEst = estimateTaskTime(task, prevTask) - (task.delay || 0);
     let interrupted = false;
 
-    // Wait up to 600ms for robot to start (status becomes non-zero)
+    // Reset machineState ref so we don't read a stale "reached" from the previous task
+    machineStateRef.current = 0;
+
+    // Wait up to 600ms for robot to start (status becomes non-zero OR machineState changes)
     const startDeadline = Date.now() + 600;
-    while (robotStatusRef.current === 0 && Date.now() < startDeadline) {
-      if (executionCancelRef.current) return false;
-      if (userPausedRef.current) break; // paused before robot started
+    while (robotStatusRef.current === 0 && machineStateRef.current === 0 && Date.now() < startDeadline) {
+      if (executionCancelRef.current) return "ok";
+      if (userPausedRef.current) break;
       await new Promise(r => setTimeout(r, 50));
     }
 
-    if (robotStatusRef.current !== 0) {
-      // Robot is moving — wait for idle; send stop immediately if user pauses
+    if (robotStatusRef.current !== 0 || machineStateRef.current !== 0) {
+      // Robot is moving — wait for a terminal machine state or robot idle
       let moveDone = Date.now() + moveMsEst * 3 + 3000;
-      while (robotStatusRef.current !== 0 && Date.now() < moveDone) {
-        if (executionCancelRef.current) return false;
+      while (Date.now() < moveDone) {
+        if (executionCancelRef.current) return "ok";
+
+        // Check machine state (authoritative "done" signal)
+        if (machineStateRef.current === 2) return "ok";        // reached target
+        if (machineStateRef.current === 3) return "singularity"; // kinematic singularity
+
+        // Fallback: robot_status went idle and no machine state signal
+        if (robotStatusRef.current === 0 && machineStateRef.current === 0) break;
+
         if (userPausedRef.current) {
           if (!interrupted) {
             stopExecution(); // halt robot NOW (publishes /stop_execution)
@@ -336,13 +352,15 @@ export default function JobDetailView({ job, onBack, onUpdate, autoStart = false
         await new Promise(r => setTimeout(r, 50));
       }
     } else {
-      // No /robot_status feedback — use exact same formula as Dry Run
+      // No feedback at all — use time estimate
       const waitMs = Math.max(2000, (100 - (task.speed ?? 50)) / 100 * 5000);
       let elapsed = 0;
       while (elapsed < waitMs) {
-        if (executionCancelRef.current) return false;
+        if (executionCancelRef.current) return "ok";
+        if (machineStateRef.current === 2) return "ok";
+        if (machineStateRef.current === 3) return "singularity";
         if (userPausedRef.current) {
-          stopExecution(); // halt robot
+          stopExecution();
           interrupted = true;
           break;
         }
@@ -355,7 +373,7 @@ export default function JobDetailView({ job, onBack, onUpdate, autoStart = false
     while (userPausedRef.current && !executionCancelRef.current) {
       await new Promise(r => setTimeout(r, 100));
     }
-    return interrupted;
+    return interrupted ? "interrupted" : "ok";
   };
 
   // ── countdown delay with live popup (only called when delay > 0)
@@ -401,6 +419,7 @@ export default function JobDetailView({ job, onBack, onUpdate, autoStart = false
     setLocalTaskIdx(0);
 
     let i = 0;
+    let singularityRetry = false; // true = resend same task as joint mode after singularity
     while (i < tasks.length) {
       if (executionCancelRef.current) break;
 
@@ -414,6 +433,8 @@ export default function JobDetailView({ job, onBack, onUpdate, autoStart = false
       if (executionCancelRef.current) break;
 
       if (!isTestMode) {
+        // On singularity retry, override to joint mode; otherwise use task's controlMode
+        const controlMode = singularityRetry ? "joint" : (task.controlMode ?? "joint");
         sendGotoPosition({
           sequence: task.sequence,
           label: task.label ?? `Task ${task.sequence}`,
@@ -422,12 +443,26 @@ export default function JobDetailView({ job, onBack, onUpdate, autoStart = false
           rail: task.rail,
           speed: task.speed ?? 50,
           gripper: task.gripper ?? 0,
+          controlMode,
+          // Effector mode: include Cartesian target for IK
+          ...(controlMode === "effector" && task.x != null && {
+            x: task.x, y: task.y, z: task.z,
+            roll: task.roll, pitch: task.pitch, yaw: task.yaw,
+          }),
         });
       }
+      singularityRetry = false;
 
-      const interrupted = await waitForRobotMovement(task, tasks[i - 1]);
-      if (interrupted && !executionCancelRef.current) {
-        // Robot was halted mid-task — retry same task (robot moves from stopped position to target)
+      const result = await waitForRobotMovement(task, tasks[i - 1]);
+
+      if (result === "singularity" && !executionCancelRef.current) {
+        // Robot hit a kinematic singularity — auto-retry same task as joint mode
+        console.warn(`[Singularity] Task ${task.sequence} — retrying as joint mode`);
+        singularityRetry = true;
+        continue;
+      }
+      if (result === "interrupted" && !executionCancelRef.current) {
+        // Robot was halted mid-task — retry same task from stopped position
         continue;
       }
 

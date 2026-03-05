@@ -165,6 +165,22 @@ Publish on every state change (not periodic):
 - `1` = Executing (moving)
 - `2` = Paused (holding position)
 
+### `/machine_state` — std_msgs/Int8
+Publish on every state change (not periodic). Used by the UI to drive task sequencing:
+- `0` = Idle / normal (no task running)
+- `2` = Reached target (robot arrived at the commanded position; UI will apply delay then send next task)
+- `3` = Singularity (robot could not complete effector-mode motion due to kinematic singularity; UI will automatically retry the same task in joint mode)
+
+**Protocol:**
+1. Receive `/goto_position`
+2. Begin motion → publish `/machine_state = 0` (executing; already cleared from previous)
+3. Motion complete → publish `/machine_state = 2` (reached) then reset to `0`
+4. If IK planning fails with singularity → publish `/machine_state = 3` then reset to `0`
+
+**UI behavior on each state:**
+- `2` (reached): apply `delay` ms countdown, then send next task
+- `3` (singularity): resend same task with `controlMode: "joint"` (once; then advance normally)
+
 ### `/safety_status` — std_msgs/Int8
 Publish when safety state changes:
 - `0` = Normal
@@ -190,6 +206,10 @@ Publish when safety state changes:
    - IDLE → EXECUTING → IDLE (normal)
    - EXECUTING → PAUSED → EXECUTING (pause/resume)
    - any → IDLE (stop)
+6. Implement `/machine_state` publishing alongside `/robot_status`:
+   - After motion completes successfully → publish `2` (reached) then `0`
+   - If effector-mode IK fails with singularity → publish `3` (singularity) then `0`
+   - Reset to `0` at start of each new motion
 6. Thread-safe: motion execution in a background thread, subscribers on main thread
 7. Publish `/joint_states` and `/end_effector_pose` in timer callbacks (10Hz each)
 
@@ -200,7 +220,8 @@ Provide:
    - class `RobotController(Node)`
    - methods: `goto_position_cb`, `execute_joint_mode`, `execute_effector_mode`,
      `tool_config_cb`, `pause_cb`, `stop_cb`, `teach_mode_cb`,
-     `joint_states_timer_cb`, `effector_pose_timer_cb`
+     `joint_states_timer_cb`, `effector_pose_timer_cb`,
+     `publish_machine_state`
 2. Brief setup instructions for launching with MoveIt2
 
 Make the code clean, well-commented in English, and production-ready for ROS2.
@@ -221,6 +242,7 @@ Make the code clean, well-commented in English, and production-ready for ROS2.
 | `/joint_states` | Robot → UI | JointState | Live joint + rail + gripper feedback (10Hz) |
 | `/end_effector_pose` | Robot → UI | String/JSON | Live Cartesian pose mm+deg (10Hz) |
 | `/robot_status` | Robot → UI | Int8 | 0=idle, 1=executing, 2=paused |
+| `/machine_state` | Robot → UI | Int8 | 0=idle, 2=reached, 3=singularity |
 | `/safety_status` | Robot → UI | Int8 | 0=normal, 1=warning, 2=emergency |
 
 ## controlMode Decision Flow

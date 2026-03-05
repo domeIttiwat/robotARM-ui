@@ -34,6 +34,7 @@ interface RosContextType {
   gripperPos: number;
   safetyStatus: number;
   robotStatus: number;
+  machineState: number;
   effectorPose: EffectorPose;
   sendJob: (jobData: any) => void;
   sendGotoPosition: (taskData: any) => void;
@@ -64,6 +65,7 @@ export const RosProvider = ({ children }: { children: React.ReactNode }) => {
   const [gripperPos, setGripperPos] = useState(0);
   const [safetyStatus, setSafetyStatus] = useState(0);
   const [robotStatus, setRobotStatus] = useState(0);
+  const [machineState, setMachineState] = useState(0);
   const [effectorPose, setEffectorPose] = useState<EffectorPose>({ x: 0, y: 0, z: 0, roll: 0, pitch: 0, yaw: 0 });
   const [isExecuting, setIsExecuting] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -190,6 +192,15 @@ export const RosProvider = ({ children }: { children: React.ReactNode }) => {
           setIsPaused(true);
         }
       });
+
+      // Machine state subscriber
+      // 0 = idle/normal, 2 = reached target, 3 = singularity (effector mode failed)
+      const machineStateSub = new ROSLIB.Topic({
+        ros: rosInstance,
+        name: "/machine_state",
+        messageType: "std_msgs/Int8",
+      });
+      machineStateSub.subscribe((m: any) => setMachineState(m.data));
 
       setRos(rosInstance);
     };
@@ -340,6 +351,7 @@ export const RosProvider = ({ children }: { children: React.ReactNode }) => {
         gripperPos,
         safetyStatus,
         robotStatus,
+        machineState,
         effectorPose,
         sendJob,
         sendGotoPosition,

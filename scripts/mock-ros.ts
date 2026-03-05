@@ -28,6 +28,26 @@ const clientIds = new WeakMap<WebSocket, number>();
 let hasJointPublisher = false;
 let autoPublishTimer: NodeJS.Timeout | null = null;
 
+// Simulate machine_state after a /goto_position command
+let machineStateTimer: NodeJS.Timeout | null = null;
+
+function publishMachineState(state: number) {
+  const subs = subscribers.get("/machine_state");
+  if (!subs || subs.size === 0) return;
+  const payload = JSON.stringify({ op: "publish", topic: "/machine_state", msg: { data: state } });
+  subs.forEach((sub) => { if (sub.readyState === 1) sub.send(payload); });
+  console.log(`[AUTO] /machine_state → ${state}`);
+}
+
+function simulateMachineState() {
+  if (machineStateTimer) clearTimeout(machineStateTimer);
+  // After ~1.5s, report "reached" (state=2), then reset to idle (state=0)
+  machineStateTimer = setTimeout(() => {
+    publishMachineState(2); // reached
+    machineStateTimer = setTimeout(() => publishMachineState(0), 200);
+  }, 1500);
+}
+
 const wss = new WebSocketServer({ port: PORT });
 
 console.log(`\n🤖  Mock ROS Bridge ready on ws://localhost:${PORT}`);
@@ -64,6 +84,10 @@ wss.on("connection", (ws: WebSocket) => {
       if (topic === "/joint_states" || topic === "/end_effector_pose") {
         startAutoPublish();
       }
+      // Send initial idle state when UI subscribes to /machine_state
+      if (topic === "/machine_state") {
+        setTimeout(() => publishMachineState(0), 100);
+      }
     } else if (op === "publish") {
       const subs = subscribers.get(topic);
       const count = subs ? subs.size : 0;
@@ -73,6 +97,11 @@ wss.on("connection", (ws: WebSocket) => {
       if (topic === "/joint_states") {
         hasJointPublisher = true;
         stopAutoPublish();
+      }
+
+      // Simulate machine_state when UI sends a goto_position command
+      if (topic === "/goto_position") {
+        simulateMachineState();
       }
 
       // Relay to all subscribers except the sender

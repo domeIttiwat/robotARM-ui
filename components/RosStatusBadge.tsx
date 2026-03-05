@@ -1,10 +1,22 @@
 "use client";
 
 import { useRos } from "@/context/RosContext";
-import { ShieldCheck } from "lucide-react";
+import { ShieldCheck, Bot } from "lucide-react";
+
+function getRobotState(robotStatus: number, machineState: number) {
+  if (machineState === 3)
+    return { label: "Singularity", bg: "bg-red-100 text-red-700", dot: "bg-red-500 animate-pulse" };
+  if (robotStatus === 2)
+    return { label: "หยุดชั่วคราว", bg: "bg-orange-100 text-orange-700", dot: "bg-orange-500" };
+  if (robotStatus === 1)
+    return { label: "เคลื่อนที่", bg: "bg-blue-100 text-blue-700", dot: "bg-blue-500 animate-pulse" };
+  if (machineState === 2)
+    return { label: "ถึงแล้ว", bg: "bg-teal-100 text-teal-700", dot: "bg-teal-500" };
+  return { label: "ว่าง", bg: "bg-gray-100 text-gray-500", dot: "bg-gray-400" };
+}
 
 export default function RosStatusBadge() {
-  const { isConnected, safetyStatus, isTestMode, setTestMode } = useRos();
+  const { isConnected, safetyStatus, isTestMode, setTestMode, robotStatus, machineState } = useRos();
 
   const safety =
     safetyStatus === 2
@@ -12,6 +24,8 @@ export default function RosStatusBadge() {
       : safetyStatus === 1
         ? { label: "เตือน", bg: "bg-orange-500", text: "text-white" }
         : { label: "ปกติ", bg: "bg-emerald-500", text: "text-white" };
+
+  const robotState = getRobotState(robotStatus, machineState);
 
   return (
     <div className="flex items-center gap-2">
@@ -43,6 +57,13 @@ export default function RosStatusBadge() {
       >
         SIM
       </button>
+
+      {/* Robot state */}
+      <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold ${robotState.bg}`}>
+        <div className={`w-1.5 h-1.5 rounded-full ${robotState.dot}`} />
+        <Bot size={12} />
+        {robotState.label}
+      </div>
 
       {/* Safety status — big pill */}
       <div
