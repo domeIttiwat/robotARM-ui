@@ -4,7 +4,7 @@ import { useRos } from "@/context/RosContext";
 import JobDetailView from "@/components/JobDetailView";
 import JobEditor from "@/components/JobEditor";
 import RosStatusBadge from "@/components/RosStatusBadge";
-import { Activity, LayoutGrid, List, Home, SlidersHorizontal, Pencil, Gamepad2 } from "lucide-react";
+import { Activity, LayoutGrid, List, Home, SlidersHorizontal, Pencil, Gamepad2, Settings2 } from "lucide-react";
 import CalibrationModal from "@/components/CalibrationModal";
 import JogControlPanel from "@/components/JogControlPanel";
 
@@ -98,6 +98,13 @@ const Dashboard = ({
         </div>
         <div className="flex items-center gap-4">
           <RosStatusBadge />
+          <a
+            href="/config"
+            className="flex items-center gap-2 px-5 py-4 bg-gray-100 hover:bg-gray-200 active:bg-gray-300 rounded-2xl transition-colors font-black text-gray-700"
+            title="ตั้งค่าโมเดล 3D"
+          >
+            <Settings2 size={22} />
+          </a>
           <button
             onClick={() => sendGotoPosition({ sequence: 0, label: "Home", j1: 0, j2: 0, j3: 0, j4: 0, j5: 0, j6: 0, rail: 0, speed: 20, gripper: 0 })}
             className="flex items-center gap-3 px-8 py-5 bg-black hover:bg-gray-800 active:bg-gray-900 text-white rounded-2xl transition-colors font-black text-lg shadow-lg"

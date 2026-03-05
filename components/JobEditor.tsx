@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
 import { useRos } from "@/context/RosContext";
+import { useViewerFlips } from "@/hooks/useViewerFlips";
 const RobotViewer3D = dynamic(() => import("@/components/RobotViewer3D"), { ssr: false });
 import {
   ArrowLeft,
@@ -411,6 +412,7 @@ export default function JobEditor({
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
   const [dryRunIdx, setDryRunIdx] = useState(-1);
   const [showJog, setShowJog] = useState(false);
+  const { flips } = useViewerFlips();
   const [dryRunDelayMs, setDryRunDelayMs] = useState<number | null>(null);
   const dryRunDelayTotalRef = useRef(0);
   const [taskJsonIdx, setTaskJsonIdx] = useState<number | null>(null);
@@ -803,8 +805,8 @@ export default function JobEditor({
         </div>
 
         {/* Middle Panel — 3D digital twin */}
-        <div className="w-80 border-r border-gray-100 shrink-0 overflow-hidden">
-          <RobotViewer3D joints={jointStates} />
+        <div className="w-[420px] border-r border-gray-100 shrink-0 overflow-hidden">
+          <RobotViewer3D joints={jointStates} flips={flips} />
         </div>
 
         {/* Right Panel — Sortable Timeline */}

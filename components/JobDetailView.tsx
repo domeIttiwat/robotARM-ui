@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import dynamic from "next/dynamic";
 import { useRos } from "@/context/RosContext";
+import { useViewerFlips } from "@/hooks/useViewerFlips";
 import RosStatusBadge from "@/components/RosStatusBadge";
 import JobEditor from "@/components/JobEditor";
 const RobotViewer3D = dynamic(() => import("@/components/RobotViewer3D"), { ssr: false });
@@ -160,6 +161,7 @@ export default function JobDetailView({ job, onBack, onUpdate, autoStart = false
   const [taskElapsedMs, setTaskElapsedMs] = useState(0);
   const [showJson, setShowJson] = useState(false);
   const [showJog, setShowJog] = useState(false);
+  const { flips } = useViewerFlips();
   const [copied, setCopied] = useState(false);
 
   const [showCompletionModal, setShowCompletionModal] = useState(false);
@@ -683,8 +685,8 @@ export default function JobDetailView({ job, onBack, onUpdate, autoStart = false
       </div>
 
       {/* ── Middle panel: 3D digital twin ─────────────────── */}
-      <div className="w-80 border-r border-gray-100 shrink-0 overflow-hidden">
-        <RobotViewer3D joints={jointStates} />
+      <div className="w-[420px] border-r border-gray-100 shrink-0 overflow-hidden">
+        <RobotViewer3D joints={jointStates} flips={flips} />
       </div>
 
       {/* ── Right panel: execution controls + task list ───── */}
