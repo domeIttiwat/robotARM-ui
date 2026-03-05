@@ -14,7 +14,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="h-full">
+    <html lang="en" className="h-full" suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){if(localStorage.getItem('theme')!=='light')document.documentElement.classList.add('dark')})();`,
+          }}
+        />
+      </head>
       <body className="antialiased h-full w-full m-0 p-0 overflow-hidden">
         <RosProvider>
           <SafetyOverlay />

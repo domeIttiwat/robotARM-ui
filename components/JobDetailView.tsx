@@ -523,10 +523,10 @@ export default function JobDetailView({ job, onBack, onUpdate, autoStart = false
   }
 
   return (
-    <div className="h-screen flex flex-col bg-[#F5F5F7]">
+    <div className="h-screen flex flex-col bg-[#F5F5F7] dark:bg-[#070d1b]">
 
       {/* ── Header ─────────────────────────────────────────── */}
-      <div className="bg-white border-b border-gray-100 px-5 pt-4 pb-3 shrink-0">
+      <div className="bg-white dark:bg-[#0a1428] border-b border-gray-100 px-5 pt-4 pb-3 shrink-0">
         {/* Row 1: back + title + actions */}
         <div className="flex items-center justify-between gap-4">
 
@@ -634,7 +634,7 @@ export default function JobDetailView({ job, onBack, onUpdate, autoStart = false
       <div className="flex-1 flex overflow-hidden">
 
       {/* ── Left panel: real-time data ───────────────────── */}
-      <div className="w-56 bg-white border-r border-gray-100 shrink-0 flex flex-col p-4 gap-3 overflow-y-auto">
+      <div className="w-56 bg-white dark:bg-[#0a1428] border-r border-gray-100 shrink-0 flex flex-col p-4 gap-3 overflow-y-auto">
         <p className="text-[10px] font-black text-gray-400 uppercase flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-blue-500 animate-ping inline-block" />
           Real-time
@@ -694,7 +694,7 @@ export default function JobDetailView({ job, onBack, onUpdate, autoStart = false
 
       {/* ── Execution control bar ────────────────────────── */}
       {isExecuting && (
-        <div className="bg-white border-b border-gray-100 px-6 py-4 shrink-0">
+        <div className="bg-white dark:bg-[#0a1428] border-b border-gray-100 px-6 py-4 shrink-0">
           {/* Status + progress */}
           <div className="flex items-center gap-4 mb-3">
             <div className="flex-1">
@@ -774,7 +774,7 @@ export default function JobDetailView({ job, onBack, onUpdate, autoStart = false
                   ? "border-blue-500 bg-blue-50 shadow-lg shadow-blue-100/60"
                   : isDone
                     ? "border-green-400 bg-green-50"
-                    : "border-gray-200 bg-white"
+                    : "border-gray-200 bg-white dark:border-white/10 dark:bg-[#0f1829]"
               }`}
             >
               {/* Top row: badge + label + meta */}

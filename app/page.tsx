@@ -6,7 +6,8 @@ import { useViewerFlips } from "@/hooks/useViewerFlips";
 import JobDetailView from "@/components/JobDetailView";
 import JobEditor from "@/components/JobEditor";
 import RosStatusBadge from "@/components/RosStatusBadge";
-import { Activity, LayoutGrid, List, Home, SlidersHorizontal, Pencil, Gamepad2, Settings2 } from "lucide-react";
+import { Activity, LayoutGrid, List, Home, SlidersHorizontal, Pencil, Gamepad2, Settings2, Moon, Sun } from "lucide-react";
+import { useDarkMode } from "@/hooks/useDarkMode";
 import CalibrationModal from "@/components/CalibrationModal";
 import JogControlPanel from "@/components/JogControlPanel";
 
@@ -59,6 +60,7 @@ const Dashboard = ({
 }) => {
   const { jointStates, railPos, gripperPos, effectorPose, isConnected, sendGotoPosition } = useRos();
   const { flips } = useViewerFlips();
+  const { dark, toggle: toggleDark } = useDarkMode();
   const [jobs, setJobs] = useState<Job[]>([]);
   const [viewMode, setViewMode] = useState<"card" | "list">(() => {
     if (typeof window !== "undefined") {
@@ -95,7 +97,7 @@ const Dashboard = ({
   };
 
   return (
-    <div className="h-screen p-10 flex flex-col gap-10 bg-[#F5F5F7]">
+    <div className="h-screen p-10 flex flex-col gap-10 bg-[#F5F5F7] dark:bg-[#070d1b]">
       <header className="flex justify-between items-center">
         <div>
           <h1 className="text-6xl font-black tracking-tight">
@@ -111,6 +113,13 @@ const Dashboard = ({
           >
             <Settings2 size={22} />
           </a>
+          <button
+            onClick={toggleDark}
+            className="flex items-center gap-2 px-5 py-4 bg-gray-100 hover:bg-gray-200 active:bg-gray-300 rounded-2xl transition-colors font-black text-gray-700"
+            title={dark ? "สลับเป็น Light Mode" : "สลับเป็น Dark Mode"}
+          >
+            {dark ? <Sun size={22} /> : <Moon size={22} />}
+          </button>
           <button
             onClick={() => sendGotoPosition({ sequence: 0, label: "Home", j1: 0, j2: 0, j3: 0, j4: 0, j5: 0, j6: 0, rail: 0, speed: 20, gripper: 0 })}
             className="flex items-center gap-3 px-8 py-5 bg-black hover:bg-gray-800 active:bg-gray-900 text-white rounded-2xl transition-colors font-black text-lg shadow-lg"
@@ -348,7 +357,10 @@ const Dashboard = ({
 };
 
 export default function App() {
-  const [load, setLoad] = useState(true);
+  const [load, setLoad] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return sessionStorage.getItem("splashShown") !== "true";
+  });
   const [view, setView] = useState<"dash" | "create" | "edit" | "detail">("dash");
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [dashKey, setDashKey] = useState(0);
@@ -368,7 +380,11 @@ export default function App() {
   };
 
   useEffect(() => {
-    const timer = setTimeout(() => setLoad(false), 4500);
+    if (!load) return;
+    const timer = setTimeout(() => {
+      sessionStorage.setItem("splashShown", "true");
+      setLoad(false);
+    }, 4500);
     return () => clearTimeout(timer);
   }, []);
 
@@ -407,7 +423,7 @@ export default function App() {
   };
 
   return (
-    <div className="antialiased min-h-screen bg-[#F5F5F7]">
+    <div className="antialiased min-h-screen bg-[#F5F5F7] dark:bg-[#070d1b]">
       {load ? (
         <div className="fixed inset-0 bg-black flex flex-col items-center justify-center z-[300]">
           {/* 3D rotating model as background */}

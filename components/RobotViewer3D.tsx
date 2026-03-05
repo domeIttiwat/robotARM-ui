@@ -5,6 +5,7 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls, useGLTF, ContactShadows, Environment } from "@react-three/drei";
 import * as THREE from "three";
 import { Sparkle, Zap, RotateCcw } from "lucide-react";
+import { useViewerSettings, ViewerSettings } from "@/hooks/useViewerSettings";
 
 const MODEL_URL  = "/models/RobotArm.glb";
 const HDR_URL    = "/models/ferndale_studio_12_4k.hdr";
@@ -22,14 +23,26 @@ const BASE_AXES: [number, number, number][] = [
   [0, 1, 0],   // J6 — local Y → world Z (wrist roll)
 ];
 
-// ─── Exposure controller (inside Canvas) ─────────────────────────────────────
+// ─── Exposure controller ──────────────────────────────────────────────────────
 function ExposureController({ exposure }: { exposure: number }) {
   const { gl } = useThree();
   useEffect(() => { gl.toneMappingExposure = exposure; }, [gl, exposure]);
   return null;
 }
 
-// ─── Reset controller (inside Canvas, watches trigger) ────────────────────────
+// ─── Background controller ────────────────────────────────────────────────────
+function BackgroundController({ bgMode, bgColor }: { bgMode: ViewerSettings["bgMode"]; bgColor: string }) {
+  const { scene } = useThree();
+  useEffect(() => {
+    if (bgMode !== "hdr") {
+      scene.background = new THREE.Color(bgColor);
+    }
+    return () => { scene.background = null; };
+  }, [scene, bgMode, bgColor]);
+  return null;
+}
+
+// ─── Reset controller ─────────────────────────────────────────────────────────
 function ResetController({ trigger }: { trigger: number }) {
   const { controls } = useThree();
   useEffect(() => {
@@ -38,8 +51,8 @@ function ResetController({ trigger }: { trigger: number }) {
   return null;
 }
 
-// ─── Soft env-reflection setup ────────────────────────────────────────────────
-function EnvReflectionSetup({ intensity }: { intensity: number }) {
+// ─── Env reflection setup ─────────────────────────────────────────────────────
+function EnvReflectionSetup({ intensity, minRoughness }: { intensity: number; minRoughness: number }) {
   const { scene } = useThree();
   useEffect(() => {
     scene.traverse((obj) => {
@@ -49,13 +62,12 @@ function EnvReflectionSetup({ intensity }: { intensity: number }) {
           if (!mat || !("envMapIntensity" in mat)) return;
           const m = mat as THREE.MeshStandardMaterial;
           m.envMapIntensity = intensity;
-          // keep roughness ≥ 0.45 so reflections stay blurry
-          if (m.roughness < 0.45) m.roughness = 0.45;
+          if (m.roughness < minRoughness) m.roughness = minRoughness;
           m.needsUpdate = true;
         });
       }
     });
-  }, [scene, intensity]);
+  }, [scene, intensity, minRoughness]);
   return null;
 }
 
@@ -97,19 +109,28 @@ export interface RobotViewer3DProps {
   joints?: number[];
   flips?: number[];
   className?: string;
+  /** If provided, always use HQ mode with these exact settings (used by config page preview) */
+  settingsOverride?: ViewerSettings;
 }
 
 export default function RobotViewer3D({
   joints = [0, 0, 0, 0, 0, 0],
   flips  = [1, 1, 1, 1, 1, 1],
   className,
+  settingsOverride,
 }: RobotViewer3DProps) {
+  const { settings: storedSettings } = useViewerSettings();
+
   const [hq, setHq] = useState<boolean>(() => {
     if (typeof window === "undefined") return true;
     const stored = localStorage.getItem(QUALITY_KEY);
     return stored === null ? true : stored === "true";
   });
   const [resetTrigger, setResetTrigger] = useState(0);
+
+  // If settingsOverride is provided (config page preview), always HQ with those settings
+  const isHQ = settingsOverride != null || hq;
+  const s = settingsOverride ?? storedSettings;
 
   const toggleHq = () => {
     setHq((prev) => {
@@ -119,40 +140,46 @@ export default function RobotViewer3D({
     });
   };
 
+  const canvasBg = s.bgMode !== "hdr" ? s.bgColor : "#0f172a";
+
   return (
-    <div className={`w-full h-full relative ${className ?? ""}`} style={{ background: "#0f172a" }}>
-      {/* Overlay buttons */}
-      <div className="absolute top-3 right-3 z-10 flex gap-2 pointer-events-none">
-        <button
-          onClick={() => setResetTrigger((n) => n + 1)}
-          className="pointer-events-auto flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-white/10 hover:bg-white/20 text-white backdrop-blur-sm transition-colors"
-          title="Reset view"
-        >
-          <RotateCcw size={12} /> Reset View
-        </button>
-        <button
-          onClick={toggleHq}
-          className={`pointer-events-auto flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold backdrop-blur-sm transition-colors ${
-            hq
-              ? "bg-yellow-400/20 hover:bg-yellow-400/30 text-yellow-300"
-              : "bg-white/10 hover:bg-white/20 text-white/50"
-          }`}
-          title={hq ? "High Quality (คลิกเพื่อปิด HDR)" : "Low Quality (คลิกเพื่อเปิด HDR)"}
-        >
-          {hq ? <Sparkle size={12} /> : <Zap size={12} />}
-          {hq ? "HQ" : "LQ"}
-        </button>
-      </div>
+    <div className={`w-full h-full relative ${className ?? ""}`} style={{ background: canvasBg }}>
+      {/* Overlay buttons — hide when settingsOverride (config preview) */}
+      {!settingsOverride && (
+        <div className="absolute top-3 right-3 z-10 flex gap-2 pointer-events-none">
+          <button
+            onClick={() => setResetTrigger((n) => n + 1)}
+            className="pointer-events-auto flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-white/10 hover:bg-white/20 text-white backdrop-blur-sm transition-colors"
+            title="Reset view"
+          >
+            <RotateCcw size={12} /> Reset View
+          </button>
+          <button
+            onClick={toggleHq}
+            className={`pointer-events-auto flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold backdrop-blur-sm transition-colors ${
+              hq
+                ? "bg-yellow-400/20 hover:bg-yellow-400/30 text-yellow-300"
+                : "bg-white/10 hover:bg-white/20 text-white/50"
+            }`}
+            title={hq ? "High Quality (คลิกเพื่อปิด HDR)" : "Low Quality (คลิกเพื่อเปิด HDR)"}
+          >
+            {hq ? <Sparkle size={12} /> : <Zap size={12} />}
+            {hq ? "HQ" : "LQ"}
+          </button>
+        </div>
+      )}
 
       <Canvas
         camera={{ position: [1.0, 0.8, 1.0], fov: 45 }}
-        shadows={hq}
-        gl={{ antialias: hq }}
+        shadows={isHQ}
+        gl={{ antialias: isHQ }}
       >
-        {hq ? (
+        <BackgroundController bgMode={s.bgMode} bgColor={s.bgColor} />
+
+        {isHQ ? (
           <>
-            <ambientLight intensity={0.3} />
-            <directionalLight position={[4, 8, 4]} intensity={1.6} castShadow shadow-mapSize={[1024, 1024]} />
+            <ambientLight intensity={s.ambientIntensity} />
+            <directionalLight position={[4, 8, 4]} intensity={s.directIntensity} castShadow shadow-mapSize={[1024, 1024]} />
           </>
         ) : (
           <>
@@ -164,13 +191,13 @@ export default function RobotViewer3D({
         )}
 
         <Suspense fallback={<Loader />}>
-          {hq && <Environment files={HDR_URL} background={false} />}
-          {hq && <EnvReflectionSetup intensity={0.4} />}
+          {isHQ && <Environment files={HDR_URL} background={s.bgMode === "hdr"} />}
+          {isHQ && <EnvReflectionSetup intensity={s.envMapIntensity} minRoughness={s.minRoughness} />}
           <RobotScene joints={joints} flips={flips} />
-          {hq && <ContactShadows position={[0, 0, 0]} opacity={0.5} scale={3} blur={1.5} color="#000000" />}
+          {isHQ && <ContactShadows position={[0, 0, 0]} opacity={0.5} scale={3} blur={1.5} color="#000000" />}
         </Suspense>
 
-        <ExposureController exposure={hq ? 0.763 : 1.0} />
+        <ExposureController exposure={isHQ ? Math.pow(2, s.exposure) : 1.0} />
         <OrbitControls enablePan={false} minDistance={0.4} maxDistance={5} target={[0, 0.3, 0]} makeDefault />
         <ResetController trigger={resetTrigger} />
         <gridHelper args={[3, 20, "#1e3a5f", "#0f2847"]} />

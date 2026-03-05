@@ -172,7 +172,7 @@ function SortableTaskCard({
       <button
         {...attributes}
         {...listeners}
-        className="w-14 flex-shrink-0 flex flex-col items-center justify-center gap-1 text-gray-300 hover:text-gray-500 active:text-gray-700 cursor-grab active:cursor-grabbing touch-none bg-gray-50/80 border-r border-gray-100 hover:bg-gray-100 transition-colors"
+        className="w-14 flex-shrink-0 flex flex-col items-center justify-center gap-1 text-gray-300 hover:text-gray-500 active:text-gray-700 cursor-grab active:cursor-grabbing touch-none bg-gray-50/80 dark:bg-white/[0.04] border-r border-gray-100 hover:bg-gray-100 dark:hover:bg-white/[0.07] transition-colors"
         tabIndex={-1}
         aria-label="Drag to reorder"
       >
@@ -183,7 +183,7 @@ function SortableTaskCard({
       {/* Main Content */}
       <div
         className={`flex-1 p-5 space-y-4 transition-colors ${
-          isRunning ? "bg-blue-50/40" : isDone ? "bg-green-50/40" : captured ? "bg-green-50/40" : testing ? "bg-orange-50/30" : ""
+          isRunning ? "bg-blue-50/40 dark:bg-blue-500/10" : isDone ? "bg-green-50/40 dark:bg-green-500/10" : captured ? "bg-green-50/40 dark:bg-green-500/10" : testing ? "bg-orange-50/30 dark:bg-orange-500/08" : ""
         }`}
       >
         {/* Row 1: Sequence badge + Label input + Delete */}
@@ -198,7 +198,7 @@ function SortableTaskCard({
             value={task.label || ""}
             onChange={(e) => onLabelChange(idx, e.target.value)}
             placeholder={`Task ${idx + 1}`}
-            className="flex-1 font-bold text-lg text-[#1D1D1F] bg-transparent border-b-2 border-transparent focus:border-blue-400 focus:outline-none px-1 py-1 transition-colors min-w-0"
+            className="flex-1 font-bold text-lg text-[#1D1D1F] dark:text-[#e2eaff] bg-transparent border-b-2 border-transparent focus:border-blue-400 focus:outline-none px-1 py-1 transition-colors min-w-0"
           />
           {isRunning && (
             <span className="text-[11px] font-black text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full animate-pulse flex-shrink-0">
@@ -708,9 +708,9 @@ export default function JobEditor({
   const title = mode === "create" ? "New Job" : `Edit: ${jobName || job?.name}`;
 
   return (
-    <div className="h-screen flex flex-col bg-[#F5F5F7]">
+    <div className="h-screen flex flex-col bg-[#F5F5F7] dark:bg-[#070d1b]">
       {/* Top Bar */}
-      <div className="p-6 bg-white border-b flex justify-between items-center sticky top-0 z-50">
+      <div className="p-6 bg-white dark:bg-[#0a1428] border-b flex justify-between items-center sticky top-0 z-50">
         <button
           onClick={onCancel}
           className="flex items-center gap-2 text-gray-400 font-bold hover:text-black transition-colors"
@@ -754,21 +754,21 @@ export default function JobEditor({
 
       <div className="flex-1 flex overflow-hidden">
         {/* Left Panel */}
-        <div className="w-80 p-8 border-r bg-white space-y-8 overflow-y-auto">
+        <div className="w-80 p-8 border-r bg-white dark:bg-[#0a1428] space-y-8 overflow-y-auto">
           <h2 className="text-3xl font-black tracking-tight">{title}</h2>
 
           <textarea
             value={jobName}
             onChange={(e) => setJobName(e.target.value)}
             placeholder="ชื่องาน / Job Name..."
-            className="w-full p-5 bg-gray-50 border-2 border-transparent rounded-[28px] text-xl font-bold placeholder-gray-300 focus:outline-none focus:border-blue-400 transition-colors resize-none h-24"
+            className="w-full p-5 bg-gray-50 dark:bg-[#111d35] dark:text-[#e2eaff] dark:placeholder-[#4a5a8a] border-2 border-transparent rounded-[28px] text-xl font-bold placeholder-gray-300 focus:outline-none focus:border-blue-400 transition-colors resize-none h-24"
           />
 
           <textarea
             value={jobDescription}
             onChange={(e) => setJobDescription(e.target.value)}
             placeholder="Description (optional)..."
-            className="w-full p-5 bg-gray-50 border-2 border-transparent rounded-[28px] text-sm placeholder-gray-300 focus:outline-none focus:border-blue-400 transition-colors resize-none h-16"
+            className="w-full p-5 bg-gray-50 dark:bg-[#111d35] dark:text-[#e2eaff] dark:placeholder-[#4a5a8a] border-2 border-transparent rounded-[28px] text-sm placeholder-gray-300 focus:outline-none focus:border-blue-400 transition-colors resize-none h-16"
           />
 
           <div className="p-6 bg-blue-50 text-blue-700 rounded-[30px] text-sm font-medium border border-blue-100">
@@ -812,7 +812,7 @@ export default function JobEditor({
         {/* Right Panel — Sortable Timeline */}
         <div
           ref={scrollContainerRef}
-          className="flex-1 p-10 overflow-y-auto bg-gray-50/50"
+          className="flex-1 p-10 overflow-y-auto bg-gray-50/50 dark:bg-[#070d1b]"
         >
           <div className="mb-10">
             <h2 className="text-4xl font-black tracking-tight">Timeline</h2>
@@ -863,7 +863,7 @@ export default function JobEditor({
                     <div className="w-10 h-10 bg-blue-100 rounded-[14px] flex items-center justify-center font-black text-blue-500 text-sm flex-shrink-0">
                       {tasks.findIndex((t) => t.id === activeTask.id) + 1}
                     </div>
-                    <span className="flex-1 font-bold text-xl text-[#1D1D1F]">
+                    <span className="flex-1 font-bold text-xl text-[#1D1D1F] dark:text-[#e2eaff]">
                       {activeTask.label || `Task`}
                     </span>
                     <div className="text-xs font-mono font-bold text-gray-400 uppercase hidden lg:block">
