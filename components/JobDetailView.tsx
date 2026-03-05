@@ -1,9 +1,11 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useMemo } from "react";
+import dynamic from "next/dynamic";
 import { useRos } from "@/context/RosContext";
 import RosStatusBadge from "@/components/RosStatusBadge";
 import JobEditor from "@/components/JobEditor";
+const RobotViewer3D = dynamic(() => import("@/components/RobotViewer3D"), { ssr: false });
 import {
   ArrowLeft,
   Play,
@@ -171,7 +173,7 @@ export default function JobDetailView({ job, onBack, onUpdate, autoStart = false
   const executionCancelRef = useRef(false);
   const userPausedRef = useRef(false); // user's explicit pause/resume — NOT synced from robot
   const robotStatusRef = useRef(0);
-  const machineStateRef = useRef(0);
+  const machineStateRef = useRef<number>(0);
   const robotWasMovingRef = useRef(false);
   const executionStartMsRef = useRef(0);
   // Keep latest startExecutionFlow in ref to avoid stale closure in countdown effect
@@ -357,8 +359,9 @@ export default function JobDetailView({ job, onBack, onUpdate, autoStart = false
       let elapsed = 0;
       while (elapsed < waitMs) {
         if (executionCancelRef.current) return "ok";
-        if (machineStateRef.current === 2) return "ok";
-        if (machineStateRef.current === 3) return "singularity";
+        const ms = machineStateRef.current as number;
+        if (ms === 2) return "ok";
+        if (ms === 3) return "singularity";
         if (userPausedRef.current) {
           stopExecution();
           interrupted = true;
@@ -677,6 +680,11 @@ export default function JobDetailView({ job, onBack, onUpdate, autoStart = false
             <div className="h-full bg-orange-400 rounded-full transition-all duration-300" style={{ width: `${gripperPos}%` }} />
           </div>
         </div>
+      </div>
+
+      {/* ── Middle panel: 3D digital twin ─────────────────── */}
+      <div className="w-80 border-r border-gray-100 shrink-0 overflow-hidden">
+        <RobotViewer3D joints={jointStates} />
       </div>
 
       {/* ── Right panel: execution controls + task list ───── */}
