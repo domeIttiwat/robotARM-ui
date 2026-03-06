@@ -54,6 +54,21 @@ function Section({ title, hqOnly, children }: { title: string; hqOnly?: boolean;
   );
 }
 
+// ── Reusable toggle row ───────────────────────────────────────────────────────
+function Toggle({ label, value, onChange }: { label: string; value: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-[#111d35] rounded-2xl">
+      <span className="text-sm font-semibold text-gray-700 dark:text-[#b0c4e0]">{label}</span>
+      <button
+        onClick={() => onChange(!value)}
+        className={`relative w-12 h-6 rounded-full transition-colors ${value ? "bg-blue-500" : "bg-gray-300 dark:bg-[#1a2540]"}`}
+      >
+        <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${value ? "translate-x-7" : "translate-x-1"}`} />
+      </button>
+    </div>
+  );
+}
+
 // ── Page component ────────────────────────────────────────────────────────────
 export default function ConfigPage() {
   const router = useRouter();
@@ -188,6 +203,39 @@ export default function ConfigPage() {
             )}
           </Section>
 
+          {/* ── HDR Environment File ────────────────────────────────────── */}
+          <Section title="HDR Environment" hqOnly>
+            <p className="text-xs text-gray-400 dark:text-[#8090b8] -mt-3">ใช้กับ HDR Sky และ Env Map Reflection</p>
+            <div className="space-y-2">
+              {([
+                { file: "ferndale_studio_12_4k.hdr", label: "Ferndale Studio 12" },
+                { file: "ferndale_studio_07_4k.hdr", label: "Ferndale Studio 07" },
+              ] as const).map(({ file, label }) => {
+                const active = (settings.hdrFile ?? DEFAULT_SETTINGS.hdrFile) === file;
+                return (
+                  <button
+                    key={file}
+                    onClick={() => update({ hdrFile: file })}
+                    className={`w-full flex items-center gap-3 p-3 rounded-2xl text-left transition-colors ${
+                      active
+                        ? "bg-blue-500/15 dark:bg-blue-500/20 border border-blue-400/40"
+                        : "bg-gray-50 dark:bg-[#111d35] border border-transparent hover:bg-gray-100 dark:hover:bg-[#1a2540]"
+                    }`}
+                  >
+                    <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${active ? "bg-blue-500" : "bg-gray-300 dark:bg-[#2a3a5a]"}`} />
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-xs font-black truncate ${active ? "text-blue-600 dark:text-blue-300" : "text-gray-700 dark:text-[#b0c4e0]"}`}>
+                        {label}
+                      </p>
+                      <p className="text-[10px] font-mono text-gray-400 dark:text-[#6878a8] truncate mt-0.5">{file}</p>
+                    </div>
+                    {active && <span className="text-[9px] font-black text-blue-500 dark:text-blue-300 shrink-0">ACTIVE</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </Section>
+
           {/* ── Model Materials ────────────────────────────────────────── */}
           <Section title="Model Materials">
             {discoveredMats.length === 0 ? (
@@ -287,6 +335,121 @@ export default function ConfigPage() {
               label="Blur"
               value={settings.shadowBlur ?? DEFAULT_SETTINGS.shadowBlur} min={0.1} max={10} step={0.1}
               onChange={(v) => update({ shadowBlur: v })}
+            />
+          </Section>
+
+          {/* ── Ground Reflection ──────────────────────────────────────── */}
+          <Section title="Ground Reflection" hqOnly>
+            <Toggle
+              label="Enable"
+              value={settings.reflectorEnabled ?? DEFAULT_SETTINGS.reflectorEnabled}
+              onChange={(v) => update({ reflectorEnabled: v })}
+            />
+            <Slider
+              label="Strength"
+              value={settings.reflectorStrength ?? DEFAULT_SETTINGS.reflectorStrength} min={0} max={1} step={0.01}
+              onChange={(v) => update({ reflectorStrength: v })}
+            />
+            <Slider
+              label="Roughness"
+              value={settings.reflectorRoughness ?? DEFAULT_SETTINGS.reflectorRoughness} min={0} max={1} step={0.01}
+              onChange={(v) => update({ reflectorRoughness: v })}
+            />
+            <p className="text-xs text-gray-400 dark:text-[#8090b8] bg-gray-50 dark:bg-[#111d35] px-3 py-2 rounded-xl">
+              พื้นโปร่งใส · สะท้อนแค่หุ่น (ไม่สะท้อน HDR) · Roughness 0 = กระจกคมชัด, 1 = นุ่มเบลอ
+            </p>
+          </Section>
+
+          {/* ── Ambient Occlusion ──────────────────────────────────────── */}
+          <Section title="Ambient Occlusion" hqOnly>
+            <Toggle
+              label="Enable"
+              value={settings.aoEnabled ?? DEFAULT_SETTINGS.aoEnabled}
+              onChange={(v) => update({ aoEnabled: v })}
+            />
+            <Slider
+              label="Intensity"
+              value={settings.aoIntensity ?? DEFAULT_SETTINGS.aoIntensity} min={0} max={1} step={0.01}
+              onChange={(v) => update({ aoIntensity: v })}
+            />
+            <p className="text-xs text-gray-400 dark:text-[#8090b8] bg-gray-50 dark:bg-[#111d35] px-3 py-2 rounded-xl">
+              เพิ่มเงาในรอยร่องและขอบ — ใช้ GPU เพิ่มเติม แนะนำปิดถ้าช้า
+            </p>
+          </Section>
+
+          {/* ── Motion Blur ────────────────────────────────────────────── */}
+          <Section title="Motion Blur" hqOnly>
+            <Toggle
+              label="Enable"
+              value={settings.motionBlurEnabled ?? DEFAULT_SETTINGS.motionBlurEnabled}
+              onChange={(v) => update({ motionBlurEnabled: v })}
+            />
+            <Slider
+              label="Strength"
+              value={settings.motionBlurStrength ?? DEFAULT_SETTINGS.motionBlurStrength} min={0} max={0.98} step={0.01}
+              decimals={2}
+              onChange={(v) => update({ motionBlurStrength: v })}
+            />
+            <p className="text-xs text-gray-400 dark:text-[#8090b8] bg-gray-50 dark:bg-[#111d35] px-3 py-2 rounded-xl">
+              Afterimage trail — ยิ่งสูงยิ่งเห็น trail ยาวตามการเคลื่อนไหว
+            </p>
+          </Section>
+
+          {/* ── Fog ────────────────────────────────────────────────────── */}
+          <Section title="Fog">
+            <Toggle
+              label="Enable"
+              value={settings.fogEnabled ?? DEFAULT_SETTINGS.fogEnabled}
+              onChange={(v) => update({ fogEnabled: v })}
+            />
+            {/* Type selector */}
+            <div className="flex gap-2">
+              {(["linear", "exp"] as const).map((t) => (
+                <button
+                  key={t}
+                  onClick={() => update({ fogType: t })}
+                  className={`flex-1 py-2 rounded-xl text-xs font-black transition-colors ${
+                    (settings.fogType ?? DEFAULT_SETTINGS.fogType) === t
+                      ? "bg-gray-900 dark:bg-[#e2eaff] text-white dark:text-[#070d1b]"
+                      : "bg-gray-100 dark:bg-[#1a2540] text-gray-500 dark:text-[#8090b8] hover:bg-gray-200 dark:hover:bg-[#243050]"
+                  }`}
+                >
+                  {t === "linear" ? "Linear" : "Exponential"}
+                </button>
+              ))}
+            </div>
+            {/* Color */}
+            <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-[#111d35] rounded-2xl">
+              <span className="text-sm font-semibold text-gray-700 dark:text-[#b0c4e0] flex-1">Fog Color</span>
+              <input
+                type="color"
+                value={settings.fogColor ?? DEFAULT_SETTINGS.fogColor}
+                onChange={(e) => update({ fogColor: e.target.value })}
+                className="w-9 h-9 rounded-xl cursor-pointer border-0 bg-transparent shrink-0"
+              />
+              <button
+                onClick={() => update({ fogColor: DEFAULT_SETTINGS.fogColor })}
+                className="text-xs text-gray-400 dark:text-[#8090b8] hover:text-gray-600 dark:hover:text-[#b0c4e0]"
+              >Reset</button>
+            </div>
+            {/* Linear controls */}
+            {(settings.fogType ?? DEFAULT_SETTINGS.fogType) === "linear" && (<>
+              <Slider
+                label="Near"
+                value={settings.fogNear ?? DEFAULT_SETTINGS.fogNear} min={0} max={10} step={0.1} unit="m" decimals={1}
+                onChange={(v) => update({ fogNear: v })}
+              />
+              <Slider
+                label="Far"
+                value={settings.fogFar ?? DEFAULT_SETTINGS.fogFar} min={0.5} max={20} step={0.1} unit="m" decimals={1}
+                onChange={(v) => update({ fogFar: v })}
+              />
+            </>)}
+            {/* Density — always visible (used by Exponential, reference for Linear) */}
+            <Slider
+              label="Density"
+              value={settings.fogDensity ?? DEFAULT_SETTINGS.fogDensity} min={0.01} max={0.5} step={0.005} decimals={3}
+              onChange={(v) => update({ fogDensity: v })}
             />
           </Section>
 

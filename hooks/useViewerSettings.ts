@@ -17,10 +17,20 @@ export interface ViewerSettings {
   shadowOpacity: number;    // 0-1  (floor shadow opacity, HQ only)
   shadowBlur: number;       // 0.5-10 (floor shadow blur, HQ only)
   jOffsets: number[];       // per-joint display offset in degrees (J1-J6), visual only
-  reflectorEnabled: boolean;    // HQ only
-  reflectorStrength: number;    // 0-1  (mix strength)
-  reflectorGlossiness: number;  // 0-1  (0=blurry/matte, 1=crisp/mirror)
-  reflectorColor: string;       // hex color of the floor plane
+  hdrFile: string;          // filename of the active HDR environment map in /models/
+  reflectorEnabled: boolean;    // HQ only — transparent floor reflection
+  reflectorStrength: number;    // 0-1  (reflection opacity)
+  reflectorRoughness: number;   // 0-1  (0=sharp mirror, 1=rough/blurred)
+  fogEnabled: boolean;
+  fogType: "linear" | "exp";
+  fogColor: string;
+  fogNear: number;              // linear fog start distance
+  fogFar: number;               // linear fog end distance
+  fogDensity: number;           // exponential fog density
+  aoEnabled: boolean;           // HQ only — screen-space ambient occlusion
+  aoIntensity: number;          // 0-1
+  motionBlurEnabled: boolean;   // HQ only — afterimage motion blur
+  motionBlurStrength: number;   // 0-0.98 (AfterimagePass damp value)
 }
 
 export const DEFAULT_SETTINGS: ViewerSettings = {
@@ -36,10 +46,20 @@ export const DEFAULT_SETTINGS: ViewerSettings = {
   shadowOpacity: 0.5,
   shadowBlur: 1.5,
   jOffsets: [0, 0, 0, 0, 0, 0],
-  reflectorEnabled: true,
+  hdrFile: "ferndale_studio_12_4k.hdr",
+  reflectorEnabled: false,
   reflectorStrength: 0.8,
-  reflectorGlossiness: 0.4,
-  reflectorColor: "#0a0a1a",
+  reflectorRoughness: 0.4,
+  fogEnabled: false,
+  fogType: "linear",
+  fogColor: "#0f172a",
+  fogNear: 2.0,
+  fogFar: 8.0,
+  fogDensity: 0.15,
+  aoEnabled: false,
+  aoIntensity: 0.5,
+  motionBlurEnabled: false,
+  motionBlurStrength: 0.7,
 };
 
 function load(): ViewerSettings {

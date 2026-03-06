@@ -2,13 +2,17 @@
 
 import { Suspense, useEffect, useRef, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { OrbitControls, useGLTF, ContactShadows, Environment } from "@react-three/drei";
+import { OrbitControls, useGLTF, ContactShadows, Environment, MeshReflectorMaterial } from "@react-three/drei";
+import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
+import { RenderPass }     from "three/examples/jsm/postprocessing/RenderPass.js";
+import { GTAOPass }       from "three/examples/jsm/postprocessing/GTAOPass.js";
+import { AfterimagePass } from "three/examples/jsm/postprocessing/AfterimagePass.js";
+import { OutputPass }     from "three/examples/jsm/postprocessing/OutputPass.js";
 import * as THREE from "three";
 import { Sparkle, Zap, RotateCcw } from "lucide-react";
 import { useViewerSettings, DEFAULT_SETTINGS, ViewerSettings } from "@/hooks/useViewerSettings";
 
 const MODEL_URL   = "/models/RobotArm2.glb";
-const HDR_URL     = "/models/ferndale_studio_12_4k.hdr";
 const QUALITY_KEY = "robotViewerQuality";
 useGLTF.preload(MODEL_URL);
 
@@ -37,6 +41,25 @@ function BackgroundController({ bgMode, bgColor }: { bgMode: ViewerSettings["bgM
     if (bgMode !== "hdr") scene.background = new THREE.Color(bgColor);
     return () => { scene.background = null; };
   }, [scene, bgMode, bgColor]);
+  return null;
+}
+
+// ─── Fog controller ───────────────────────────────────────────────────────────
+function FogController({ enabled, type, color, near, far, density }: {
+  enabled: boolean; type: "linear" | "exp";
+  color: string; near: number; far: number; density: number;
+}) {
+  const { scene } = useThree();
+  useEffect(() => {
+    if (enabled) {
+      scene.fog = type === "exp"
+        ? new THREE.FogExp2(color, density)
+        : new THREE.Fog(color, near, far);
+    } else {
+      scene.fog = null;
+    }
+    return () => { scene.fog = null; };
+  }, [scene, enabled, type, color, near, far, density]);
   return null;
 }
 
@@ -136,6 +159,100 @@ function RobotScene({ joints, flips, offsets }: { joints: number[]; flips: numbe
 }
 
 
+// ─── Transparent ground reflection ───────────────────────────────────────────
+// mirror=1 → pure reflection. AdditiveBlending → dark areas = transparent,
+// bright robot = visible. HDR sky excluded: BackgroundController forces dark bg
+// when reflector is active, so scene.background = black → reflects black → invisible.
+function ReflectorFloor({ strength, roughness }: { strength: number; roughness: number }) {
+  const meshRef = useRef<THREE.Mesh>(null);
+
+  useEffect(() => {
+    const raw = meshRef.current?.material;
+    const mats = Array.isArray(raw) ? raw : raw ? [raw] : [];
+    mats.forEach((mat) => {
+      mat.blending    = THREE.AdditiveBlending;
+      mat.depthWrite  = false;
+      mat.transparent = true;
+      mat.needsUpdate = true;
+    });
+  }, []);
+
+  return (
+    <mesh ref={meshRef} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.001, 0]}>
+      <circleGeometry args={[6, 128]} />
+      <MeshReflectorMaterial
+        mirror={1 - roughness * 0.8}
+        mixBlur={roughness}
+        mixStrength={strength}
+        blur={[Math.round(roughness * 512), Math.round(roughness * 512)]}
+        roughness={roughness}
+        resolution={1024}
+        depthScale={0}
+      />
+    </mesh>
+  );
+}
+
+// ─── Post-processing: AO + Motion Blur ───────────────────────────────────────
+// Uses Three.js native passes. priority=1 takes over the render loop from R3F.
+function PostEffects({
+  aoEnabled, aoIntensity,
+  motionBlurEnabled, motionBlurStrength,
+}: {
+  aoEnabled: boolean; aoIntensity: number;
+  motionBlurEnabled: boolean; motionBlurStrength: number;
+}) {
+  const { gl, scene, camera, size } = useThree();
+  const composerRef      = useRef<EffectComposer | null>(null);
+  const gtaoRef          = useRef<GTAOPass | null>(null);
+  const afterimageRef    = useRef<AfterimagePass | null>(null);
+
+  // Rebuild composer when effect combination changes
+  useEffect(() => {
+    const composer = new EffectComposer(gl);
+    composer.addPass(new RenderPass(scene, camera));
+
+    if (aoEnabled) {
+      const gtao = new GTAOPass(scene, camera, size.width, size.height);
+      gtao.blendIntensity = aoIntensity;
+      gtaoRef.current = gtao;
+      composer.addPass(gtao);
+    } else {
+      gtaoRef.current = null;
+    }
+
+    if (motionBlurEnabled) {
+      const ai = new AfterimagePass(motionBlurStrength);
+      afterimageRef.current = ai;
+      composer.addPass(ai);
+    } else {
+      afterimageRef.current = null;
+    }
+
+    composer.addPass(new OutputPass());
+    composer.setSize(size.width, size.height);
+    composerRef.current = composer;
+
+    return () => { composer.dispose(); composerRef.current = null; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gl, scene, camera, aoEnabled, motionBlurEnabled]);
+
+  // Resize
+  useEffect(() => {
+    composerRef.current?.setSize(size.width, size.height);
+    if (gtaoRef.current) (gtaoRef.current as GTAOPass).setSize(size.width, size.height);
+  }, [size]);
+
+  // Live-update intensity without rebuilding
+  useEffect(() => { if (gtaoRef.current) gtaoRef.current.blendIntensity = aoIntensity; }, [aoIntensity]);
+  useEffect(() => { if (afterimageRef.current) afterimageRef.current.damp = motionBlurStrength; }, [motionBlurStrength]);
+
+  // Take over render loop (R3F skips its own render when priority > 0)
+  useFrame(() => { composerRef.current?.render(); }, 1);
+
+  return null;
+}
+
 function Loader() {
   return (
     <mesh>
@@ -172,8 +289,9 @@ export default function RobotViewer3D({
   });
   const [resetTrigger, setResetTrigger] = useState(0);
 
-  const isHQ = settingsOverride != null || hq;
-  const s    = settingsOverride ?? storedSettings;
+  const isHQ       = settingsOverride != null || hq;
+  const s          = settingsOverride ?? storedSettings;
+  const reflectorOn = isHQ && (s.reflectorEnabled ?? DEFAULT_SETTINGS.reflectorEnabled);
 
   const toggleHq = () => {
     setHq((prev) => {
@@ -210,7 +328,16 @@ export default function RobotViewer3D({
       )}
 
       <Canvas camera={{ position: [1.0, 0.8, 1.0], fov: 45 }} shadows={isHQ} gl={{ antialias: isHQ }}>
-        <BackgroundController bgMode={s.bgMode} bgColor={s.bgColor} />
+        {/* When reflector is on, force dark bg so HDR sky is not reflected */}
+        <BackgroundController bgMode={reflectorOn ? "dark" : s.bgMode} bgColor={s.bgColor} />
+        <FogController
+          enabled={s.fogEnabled ?? DEFAULT_SETTINGS.fogEnabled}
+          type={s.fogType ?? DEFAULT_SETTINGS.fogType}
+          color={s.fogColor ?? DEFAULT_SETTINGS.fogColor}
+          near={s.fogNear ?? DEFAULT_SETTINGS.fogNear}
+          far={s.fogFar ?? DEFAULT_SETTINGS.fogFar}
+          density={s.fogDensity ?? DEFAULT_SETTINGS.fogDensity}
+        />
 
         {isHQ ? (
           <>
@@ -227,7 +354,8 @@ export default function RobotViewer3D({
         )}
 
         <Suspense fallback={<Loader />}>
-          {isHQ && <Environment files={HDR_URL} background={s.bgMode === "hdr"} />}
+          {/* When reflector is on: HDR still lights the scene but NOT shown as skybox */}
+          {isHQ && <Environment files={`/models/${s.hdrFile ?? DEFAULT_SETTINGS.hdrFile}`} background={!reflectorOn && s.bgMode === "hdr"} />}
 
           <RobotScene joints={joints} flips={flips} offsets={s.jOffsets ?? DEFAULT_SETTINGS.jOffsets} />
 
@@ -249,12 +377,29 @@ export default function RobotViewer3D({
             />
           )}
 
+          {isHQ && (s.reflectorEnabled ?? DEFAULT_SETTINGS.reflectorEnabled) && (
+            <ReflectorFloor
+              strength={s.reflectorStrength ?? DEFAULT_SETTINGS.reflectorStrength}
+              roughness={s.reflectorRoughness ?? DEFAULT_SETTINGS.reflectorRoughness}
+            />
+          )}
         </Suspense>
 
         <ExposureController exposure={isHQ ? Math.pow(2, s.exposure) : 1.0} />
         <OrbitControls enablePan={false} minDistance={0.4} maxDistance={5} target={[0, 0.3, 0]} makeDefault />
         <ResetController trigger={resetTrigger} />
-        <gridHelper args={[3, 20, "#1e3a5f", "#0f2847"]} />
+        {!(isHQ && (s.reflectorEnabled ?? DEFAULT_SETTINGS.reflectorEnabled)) && (
+          <gridHelper args={[3, 20, "#1e3a5f", "#0f2847"]} />
+        )}
+
+        {isHQ && (s.aoEnabled || s.motionBlurEnabled) && (
+          <PostEffects
+            aoEnabled={s.aoEnabled ?? DEFAULT_SETTINGS.aoEnabled}
+            aoIntensity={s.aoIntensity ?? DEFAULT_SETTINGS.aoIntensity}
+            motionBlurEnabled={s.motionBlurEnabled ?? DEFAULT_SETTINGS.motionBlurEnabled}
+            motionBlurStrength={s.motionBlurStrength ?? DEFAULT_SETTINGS.motionBlurStrength}
+          />
+        )}
       </Canvas>
     </div>
   );
