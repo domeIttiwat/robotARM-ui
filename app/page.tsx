@@ -356,20 +356,21 @@ const Dashboard = ({
   );
 };
 
+// Module-level flag: resets on full page refresh (F5 / new tab) but not on
+// client-side navigation — prevents splash from re-showing when navigating back from /config
+let _splashDoneThisLoad = false;
+
 export default function App() {
-  const [load, setLoad] = useState(() => {
-    if (typeof window === "undefined") return true;
-    return sessionStorage.getItem("splashShown") !== "true";
-  });
+  const [load, setLoad] = useState(true);
   const [view, setView] = useState<"dash" | "create" | "edit" | "detail">("dash");
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [dashKey, setDashKey] = useState(0);
-  const [autoHome, setAutoHome] = useState(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("autoHome") === "true";
-    }
-    return false;
-  });
+  const [autoHome, setAutoHome] = useState(false);
+
+  // After hydration: read persisted values from storage
+  useEffect(() => {
+    setAutoHome(localStorage.getItem("autoHome") === "true");
+  }, []);
 
   const toggleAutoHome = () => {
     setAutoHome((prev) => {
@@ -380,11 +381,12 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (!load) return;
-    const timer = setTimeout(() => {
-      sessionStorage.setItem("splashShown", "true");
+    if (_splashDoneThisLoad) {
       setLoad(false);
-    }, 4500);
+      return;
+    }
+    _splashDoneThisLoad = true;
+    const timer = setTimeout(() => setLoad(false), 4500);
     return () => clearTimeout(timer);
   }, []);
 

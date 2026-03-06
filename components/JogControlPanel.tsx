@@ -51,7 +51,7 @@ interface AxisControlProps {
 
 function AxisControl({ label, unit, color, currentValue, onPlus, onMinus, onStop }: AxisControlProps) {
   const btnCls =
-    "w-14 h-14 rounded-2xl bg-white hover:bg-gray-100 active:bg-gray-200 border border-gray-200 text-2xl font-black flex items-center justify-center transition-colors select-none touch-none";
+    "w-14 h-14 rounded-2xl bg-white dark:bg-[#1a2540] hover:bg-gray-100 dark:hover:bg-[#243050] active:bg-gray-200 dark:active:bg-[#2d3e60] border border-gray-200 dark:border-white/8 text-2xl font-black flex items-center justify-center transition-colors select-none touch-none";
 
   const holdProps = (action: () => void) => ({
     onMouseDown:   action,
@@ -64,11 +64,11 @@ function AxisControl({ label, unit, color, currentValue, onPlus, onMinus, onStop
   });
 
   return (
-    <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-2xl select-none">
+    <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-[#111d35] rounded-2xl select-none">
       <span className={`inline-flex items-center justify-center w-16 h-9 rounded-full text-xs font-black shrink-0 ${color}`}>
         {label}
       </span>
-      <span className="flex-1 font-mono font-black text-sm tabular-nums text-gray-600">
+      <span className="flex-1 font-mono font-black text-sm tabular-nums text-gray-600 dark:text-[#b0c4e0]">
         {currentValue.toFixed(1)}{unit}
       </span>
       <button {...holdProps(onMinus)} className={btnCls}>−</button>
@@ -183,14 +183,14 @@ export default function JogControlPanel({ onClose }: { onClose: () => void }) {
       <div className="tesla-card w-full max-w-2xl flex flex-col max-h-[92vh] overflow-hidden">
 
         {/* Header */}
-        <div className="flex items-center justify-between px-8 pt-7 pb-5 border-b border-black/5">
+        <div className="flex items-center justify-between px-8 pt-7 pb-5 border-b border-black/5 dark:border-white/7">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-[16px] bg-gray-100 flex items-center justify-center">
-              <Gamepad2 size={20} className="text-gray-600" />
+            <div className="w-10 h-10 rounded-[16px] bg-gray-100 dark:bg-[#1a2540] flex items-center justify-center">
+              <Gamepad2 size={20} className="text-gray-600 dark:text-[#90a8c8]" />
             </div>
             <div>
               <h2 className="text-2xl font-black leading-tight">Jog</h2>
-              <p className="text-xs text-gray-400 font-bold mt-0.5">ควบคุมด้วยมือ</p>
+              <p className="text-xs text-gray-400 dark:text-[#9aa8c8] font-bold mt-0.5">ควบคุมด้วยมือ</p>
             </div>
           </div>
           <button
@@ -210,9 +210,9 @@ export default function JogControlPanel({ onClose }: { onClose: () => void }) {
               className={`px-6 py-2.5 rounded-full text-sm font-black transition-colors ${
                 tab === t
                   ? t === "joint"
-                    ? "bg-gray-900 text-white"
-                    : "bg-purple-600 text-white"
-                  : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                    ? "bg-gray-900 dark:bg-[#e2eaff] text-white dark:text-[#070d1b]"
+                    : "bg-purple-600 dark:bg-purple-500 text-white"
+                  : "bg-gray-100 dark:bg-[#1a2540] text-gray-500 dark:text-[#8090b8] hover:bg-gray-200 dark:hover:bg-[#243050]"
               }`}
             >
               {t === "joint" ? "Joint Mode" : "Effector Mode"}
@@ -238,7 +238,7 @@ export default function JogControlPanel({ onClose }: { onClose: () => void }) {
           ) : (
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2.5">
-                <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Position (mm)</p>
+                <p className="text-[10px] font-black text-gray-400 dark:text-[#9aa8c8] uppercase tracking-wider">Position (mm)</p>
                 {XYZ_AXES.map((axis) => (
                   <AxisControl
                     key={axis.key}
@@ -251,7 +251,7 @@ export default function JogControlPanel({ onClose }: { onClose: () => void }) {
                 ))}
               </div>
               <div className="space-y-2.5">
-                <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Orientation (°)</p>
+                <p className="text-[10px] font-black text-gray-400 dark:text-[#9aa8c8] uppercase tracking-wider">Orientation (°)</p>
                 {RPY_AXES.map((axis) => (
                   <AxisControl
                     key={axis.key}
@@ -268,9 +268,9 @@ export default function JogControlPanel({ onClose }: { onClose: () => void }) {
         </div>
 
         {/* Speed slider */}
-        <div className="px-8 pt-4 pb-7 border-t border-black/5">
+        <div className="px-8 pt-4 pb-7 border-t border-black/5 dark:border-white/7">
           <div className="flex items-center gap-4">
-            <span className="text-xs font-black text-gray-400 uppercase w-14 shrink-0">Speed</span>
+            <span className="text-xs font-black text-gray-400 dark:text-[#9aa8c8] uppercase w-14 shrink-0">Speed</span>
             <input
               type="range" min="1" max="100" step="1" value={speed}
               onChange={(e) => setSpeed(Number(e.target.value))}
