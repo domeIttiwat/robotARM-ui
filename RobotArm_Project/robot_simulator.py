@@ -127,6 +127,11 @@ class RobotSimulator:
         # Move completion event (set by move_loop when it finishes naturally)
         self._move_done_event = threading.Event()
 
+        # Jog latest-wins state
+        self._jog_target = None   # (q_end, rail, grip, speed_pct) — updated atomically
+        self._jog_active = False
+        self._jog_lock   = threading.Lock()
+
         # Trajectory state
         self._traj_tasks  = []
         self._traj_thread = None
@@ -290,6 +295,8 @@ class RobotSimulator:
         """
         Handle /goto_position (std_msgs/String).
         msg["data"] is a JSON string with the task payload.
+        label="jog" → latest-wins continuous tracking (no thread restart).
+        Other labels → original single-move behavior.
         """
         try:
             task = json.loads(msg.get("data", "{}"))
@@ -297,7 +304,40 @@ class RobotSimulator:
             print(f"[GOTO] JSON parse error: {e}")
             return
 
-        print(f"[GOTO] Received task: {task}")
+        is_jog = task.get("label") == "jog"
+
+        if is_jog:
+            speed_pct = float(task.get("speed", 30))
+            mode = task.get("controlMode", "joint")
+            if mode == "effector":
+                q_target = self.simple_ik(
+                    float(task.get("x", 0)), float(task.get("y", 0)), float(task.get("z", 0)),
+                    float(task.get("roll", 0)), float(task.get("pitch", 0)), float(task.get("yaw", 0)),
+                )
+                if q_target is None:
+                    return   # singularity — skip silently during jog
+            else:
+                q_target = [float(task.get(f"j{i+1}", self.joints[i])) for i in range(6)]
+
+            rail_target    = float(task.get("rail",    self.rail))
+            gripper_target = float(task.get("gripper", self.gripper))
+
+            with self._jog_lock:
+                self._jog_target = (q_target, rail_target, gripper_target, speed_pct)
+
+            if not self._jog_active:
+                self._jog_active   = True
+                self._motion_state = 'moving'
+                self.publish_robot_status(STATUS_EXECUTING)
+                threading.Thread(target=self._jog_loop, daemon=True, name="jog-loop").start()
+            return
+
+        # Non-jog: stop jog loop first, then original behavior
+        with self._jog_lock:
+            self._jog_active = False
+            self._jog_target = None
+
+        print(f"[GOTO] Received task: label={task.get('label')}")
 
         result = self._parse_task(task)
         if result is None:
@@ -405,6 +445,9 @@ class RobotSimulator:
         """Handle /stop_execution (std_msgs/Bool)."""
         stop = bool(msg.get("data", False))
         if stop:
+            with self._jog_lock:
+                self._jog_active = False
+                self._jog_target = None
             self._stop_flag.set()
             self._pause_event.set()     # unblock so move thread can exit
             print("[CTRL] Stopped")
@@ -576,6 +619,59 @@ class RobotSimulator:
             daemon=True,
         )
         self._move_thread.start()
+
+    def _jog_loop(self):
+        """50 Hz: tracks latest _jog_target without thread restart."""
+        last_t = time.time()
+        while True:
+            with self._jog_lock:
+                target = self._jog_target
+                active = self._jog_active
+            if not active:
+                break
+
+            now = time.time()
+            dt  = min(now - last_t, 0.1)
+            last_t = now
+
+            if target is not None:
+                q_end, rail_end, grip_end, speed_pct = target
+                max_dps  = (speed_pct / 100.0) * 90.0
+                max_step = max_dps * dt
+
+                reached = True
+                for i in range(6):
+                    delta = q_end[i] - self.joints[i]
+                    if abs(delta) > max_step:
+                        self.joints[i] += math.copysign(max_step, delta)
+                        reached = False
+                    else:
+                        self.joints[i] = q_end[i]
+
+                rail_step = (speed_pct / 100.0) * 300.0 * dt
+                rail_d = rail_end - self.rail
+                if abs(rail_d) > rail_step:
+                    self.rail += math.copysign(rail_step, rail_d)
+                    reached = False
+                else:
+                    self.rail = rail_end
+
+                self.gripper = grip_end
+
+                self.publish_joint_states()
+                self.publish_effector_pose()
+
+                if reached:
+                    self.publish_machine_state(MACHINE_REACHED)
+                    time.sleep(0.05)
+                    self.publish_machine_state(MACHINE_IDLE)
+                    with self._jog_lock:
+                        self._jog_target = None
+
+            time.sleep(0.02)   # 50 Hz
+
+        self._motion_state = 'idle'
+        self.publish_robot_status(STATUS_IDLE)
 
     def move_loop(self, finalize: bool = True):
         """

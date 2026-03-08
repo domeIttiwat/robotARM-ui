@@ -92,6 +92,12 @@ traj = {
     'cart_end':    None,
 }
 
+jog = {
+    'active': False,
+    'target': None,   # latest task dict (label="jog")
+    'last_t': 0.0,
+}
+
 WS_URL                = "ws://localhost:9090"
 JS_PUBLISH_INTERVAL   = 0.1    # seconds
 last_js_pub_t         = {'t': 0.0}
@@ -467,6 +473,71 @@ def _load_next_task():
     bridge.publish("/machine_state", {"data": 0})   # reset → UI won't read stale REACHED
 
 
+def step_jog():
+    """50Hz: moves robot toward latest jog target (latest-wins continuous tracking)."""
+    if not jog['active'] or jog['target'] is None:
+        return
+    if traj['running']:
+        return   # trajectory takes priority
+
+    target    = jog['target']
+    speed_pct = float(target.get('speed', 30))
+    mode      = target.get('controlMode', 'joint')
+
+    now = time.time()
+    dt  = min(now - jog['last_t'], 0.1)
+    jog['last_t'] = now
+
+    if mode == 'effector' and target.get('x') is not None:
+        T_tgt = (
+            SE3(target['x'] / 1000, target['y'] / 1000, target['z'] / 1000)
+            * SE3.RPY(np.deg2rad([target.get('roll', 0), target.get('pitch', 0), target.get('yaw', 0)]))
+            * tip_offset['se3'].inv()
+        )
+        q_sol, ok, *_ = robot.ik_LM(T_tgt, q0=robot.q, ilimit=300)
+        if not ok:
+            return
+        q_end = q_sol
+    else:
+        q_end = np.deg2rad([float(target.get(f'j{i+1}', np.rad2deg(robot.q[i]))) for i in range(6)])
+
+    rail_end = float(target.get('rail',    sim_rail['v']))
+    grip_end = float(target.get('gripper', sim_gripper['v']))
+
+    max_dps      = (speed_pct / 100.0) * MAX_SPEED_DEG_PER_SEC
+    max_step_rad = np.deg2rad(max_dps * dt)
+    rail_step    = (speed_pct / 100.0) * MAX_CART_SPEED_MM_PER_SEC * dt
+
+    q_new   = robot.q.copy()
+    reached = True
+    for i in range(6):
+        delta = q_end[i] - robot.q[i]
+        if abs(delta) > max_step_rad:
+            q_new[i] = robot.q[i] + np.sign(delta) * max_step_rad
+            reached = False
+        else:
+            q_new[i] = q_end[i]
+    robot.q = q_new
+
+    rail_d = rail_end - sim_rail['v']
+    if abs(rail_d) > rail_step:
+        sim_rail['v'] += np.sign(rail_d) * rail_step
+        reached = False
+    else:
+        sim_rail['v'] = rail_end
+
+    sim_gripper['v'] = grip_end
+
+    q_deg = np.rad2deg(robot.q)
+    for i, s in enumerate(joint_sliders):
+        s.value = float(np.clip(q_deg[i], s.min, s.max))
+    update_ik_sliders_from_fk()
+
+    if reached:
+        bridge.publish("/machine_state", {"data": 2})
+        jog['target'] = None
+
+
 def step_trajectory():
     """
     Called every main-loop iteration.
@@ -586,7 +657,15 @@ def handle_execute_trajectory(tasks: list):
 
 
 def handle_goto_position(task: dict):
-    """Move to a single position (DryRun / Test)."""
+    """Move to a single position (DryRun / Test / Jog)."""
+    if task.get("label") == "jog":
+        jog['active'] = True
+        jog['target'] = task
+        jog['last_t'] = time.time()
+        return
+    # Non-jog: stop jog, run as single trajectory task
+    jog['active'] = False
+    jog['target'] = None
     traj['tasks']   = [task]
     traj['idx']     = 0
     traj['running'] = True
@@ -609,6 +688,8 @@ def handle_pause(paused: bool):
 
 def handle_stop():
     """Emergency / user stop."""
+    jog['active'] = False
+    jog['target'] = None
     traj['stop']    = True
     traj['running'] = False
     traj['paused']  = False
@@ -875,6 +956,9 @@ while True:
 
     # ── Trajectory interpolation ──
     step_trajectory()
+
+    # ── Jog continuous tracking ──
+    step_jog()
 
     # ── Deferred IK (skip while trajectory is running) ──
     if not traj['running']:

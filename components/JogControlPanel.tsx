@@ -8,28 +8,28 @@ type Tab = "joint" | "effector";
 const JOG_INTERVAL_MS = 100;
 
 const JOINT_AXES = [
-  { key: "j1",      label: "J1",      unit: "°",  step: 1,  min: -180, max: 180,  color: "bg-gray-100 text-gray-700"     },
-  { key: "j2",      label: "J2",      unit: "°",  step: 1,  min: -180, max: 180,  color: "bg-gray-100 text-gray-700"     },
-  { key: "j3",      label: "J3",      unit: "°",  step: 1,  min: -180, max: 180,  color: "bg-gray-100 text-gray-700"     },
-  { key: "j4",      label: "J4",      unit: "°",  step: 1,  min: -180, max: 180,  color: "bg-gray-100 text-gray-700"     },
-  { key: "j5",      label: "J5",      unit: "°",  step: 1,  min: -180, max: 180,  color: "bg-gray-100 text-gray-700"     },
-  { key: "j6",      label: "J6",      unit: "°",  step: 1,  min: -180, max: 180,  color: "bg-gray-100 text-gray-700"     },
-  { key: "rail",    label: "Rail",    unit: "mm", step: 5,  min: 0,    max: 1000, color: "bg-blue-100 text-blue-700"     },
-  { key: "gripper", label: "Gripper", unit: "%",  step: 5,  min: 0,    max: 100,  color: "bg-orange-100 text-orange-700" },
+  { key: "j1",      label: "J1",      unit: "°",  step: 1,  min: -180, max: 180,  color: "bg-gray-100 text-gray-700",     maxRate: 90  },
+  { key: "j2",      label: "J2",      unit: "°",  step: 1,  min: -180, max: 180,  color: "bg-gray-100 text-gray-700",     maxRate: 90  },
+  { key: "j3",      label: "J3",      unit: "°",  step: 1,  min: -180, max: 180,  color: "bg-gray-100 text-gray-700",     maxRate: 90  },
+  { key: "j4",      label: "J4",      unit: "°",  step: 1,  min: -180, max: 180,  color: "bg-gray-100 text-gray-700",     maxRate: 90  },
+  { key: "j5",      label: "J5",      unit: "°",  step: 1,  min: -180, max: 180,  color: "bg-gray-100 text-gray-700",     maxRate: 90  },
+  { key: "j6",      label: "J6",      unit: "°",  step: 1,  min: -180, max: 180,  color: "bg-gray-100 text-gray-700",     maxRate: 90  },
+  { key: "rail",    label: "Rail",    unit: "mm", step: 5,  min: 0,    max: 1000, color: "bg-blue-100 text-blue-700",     maxRate: 300 },
+  { key: "gripper", label: "Gripper", unit: "%",  step: 5,  min: 0,    max: 100,  color: "bg-orange-100 text-orange-700", maxRate: 100 },
 ] as const;
 
 type JointKey = typeof JOINT_AXES[number]["key"];
 
 const XYZ_AXES = [
-  { key: "x", label: "Tip X", unit: "mm", step: 5, min: -700, max: 700, color: "bg-red-100 text-red-700"    },
-  { key: "y", label: "Tip Y", unit: "mm", step: 5, min: -700, max: 700, color: "bg-green-100 text-green-700" },
-  { key: "z", label: "Tip Z", unit: "mm", step: 5, min: 0,    max: 800, color: "bg-blue-100 text-blue-700"  },
+  { key: "x", label: "Tip X", unit: "mm", step: 5, min: -700, max: 700, color: "bg-red-100 text-red-700",    maxRate: 300 },
+  { key: "y", label: "Tip Y", unit: "mm", step: 5, min: -700, max: 700, color: "bg-green-100 text-green-700", maxRate: 300 },
+  { key: "z", label: "Tip Z", unit: "mm", step: 5, min: 0,    max: 800, color: "bg-blue-100 text-blue-700",  maxRate: 300 },
 ] as const;
 
 const RPY_AXES = [
-  { key: "roll",  label: "Tip Rx", unit: "°", step: 1, min: -180, max: 180, color: "bg-purple-100 text-purple-700" },
-  { key: "pitch", label: "Tip Ry", unit: "°", step: 1, min: -180, max: 180, color: "bg-purple-100 text-purple-700" },
-  { key: "yaw",   label: "Tip Rz", unit: "°", step: 1, min: -180, max: 180, color: "bg-purple-100 text-purple-700" },
+  { key: "roll",  label: "Tip Rx", unit: "°", step: 1, min: -180, max: 180, color: "bg-purple-100 text-purple-700", maxRate: 90 },
+  { key: "pitch", label: "Tip Ry", unit: "°", step: 1, min: -180, max: 180, color: "bg-purple-100 text-purple-700", maxRate: 90 },
+  { key: "yaw",   label: "Tip Rz", unit: "°", step: 1, min: -180, max: 180, color: "bg-purple-100 text-purple-700", maxRate: 90 },
 ] as const;
 
 // ── AxisControl ────────────────────────────────────────────────────────────────
@@ -37,10 +37,12 @@ const RPY_AXES = [
 interface AxisControlProps {
   label: string; unit: string; color: string;
   currentValue: number; min: number; max: number; step: number;
+  maxRate: number;
+  speedRef: React.MutableRefObject<number>;
   onSet: (value: number) => void;
 }
 
-function AxisControl({ label, unit, color, currentValue, min, max, step, onSet }: AxisControlProps) {
+function AxisControl({ label, unit, color, currentValue, min, max, step, maxRate, speedRef, onSet }: AxisControlProps) {
   const targetRef   = useRef(currentValue);
   const isHolding   = useRef(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -62,7 +64,8 @@ function AxisControl({ label, unit, color, currentValue, min, max, step, onSet }
   const startHold = (direction: 1 | -1) => {
     isHolding.current = true;
     const fire = () => {
-      const next = Math.max(min, Math.min(max, targetRef.current + step * direction));
+      const dynStep = Math.max(step, (speedRef.current / 100) * maxRate * (JOG_INTERVAL_MS / 1000));
+      const next = Math.max(min, Math.min(max, targetRef.current + dynStep * direction));
       targetRef.current = next;
       onSetRef.current(next);
     };
@@ -232,6 +235,7 @@ export default function JogControlPanel({ onClose }: { onClose: () => void }) {
                   label={axis.label} unit={axis.unit} color={axis.color}
                   currentValue={jointValue(axis.key)}
                   min={axis.min} max={axis.max} step={axis.step}
+                  maxRate={axis.maxRate} speedRef={speedRef}
                   onSet={(v) => sendJointSet(axis.key as JointKey, v)}
                 />
               ))}
@@ -246,6 +250,7 @@ export default function JogControlPanel({ onClose }: { onClose: () => void }) {
                     label={axis.label} unit={axis.unit} color={axis.color}
                     currentValue={effectorPose[axis.key as "x" | "y" | "z"]}
                     min={axis.min} max={axis.max} step={axis.step}
+                    maxRate={axis.maxRate} speedRef={speedRef}
                     onSet={(v) => sendEffectorSet(axis.key, v)}
                   />
                 ))}
@@ -258,6 +263,7 @@ export default function JogControlPanel({ onClose }: { onClose: () => void }) {
                     label={axis.label} unit={axis.unit} color={axis.color}
                     currentValue={effectorPose[axis.key as "roll" | "pitch" | "yaw"]}
                     min={axis.min} max={axis.max} step={axis.step}
+                    maxRate={axis.maxRate} speedRef={speedRef}
                     onSet={(v) => sendEffectorSet(axis.key, v)}
                   />
                 ))}
