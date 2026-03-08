@@ -72,7 +72,7 @@ function Toggle({ label, value, onChange }: { label: string; value: boolean; onC
 // ── Page component ────────────────────────────────────────────────────────────
 export default function ConfigPage() {
   const router = useRouter();
-  const { jointStates } = useRos();
+  const { jointStates, calibration, setCalibration } = useRos();
   const { flips, toggleFlip } = useViewerFlips();
   const { settings, update, reset } = useViewerSettings();
 
@@ -515,14 +515,38 @@ export default function ConfigPage() {
 
         </div>
 
-        {/* Right: live 3D preview */}
-        <div className="flex-1 overflow-hidden">
+        {/* Right: live 3D preview + TCP offset panel */}
+        <div className="flex-1 overflow-hidden relative">
           <RobotViewer3D
             joints={jointStates}
             flips={flips}
+            tcpOffset={calibration.tcpOffset}
             settingsOverride={settings}
             onMaterialsDiscovered={handleMaterialsDiscovered}
           />
+
+          {/* ── TCP Offset panel ─── */}
+          <div className="absolute top-4 right-4 z-10 w-72 bg-white/90 dark:bg-[#0a1428]/90 backdrop-blur-md rounded-2xl border border-gray-200/60 dark:border-white/8 p-5 space-y-4 shadow-xl pointer-events-auto">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-xs font-black text-gray-400 dark:text-[#8090b8] uppercase tracking-widest">End Effector (TCP)</h3>
+                <p className="text-[10px] text-gray-400 dark:text-[#6878a8] mt-0.5">Offset จากปลายแขน J6 (mm)</p>
+              </div>
+              <button
+                onClick={() => setCalibration({ ...calibration, tcpOffset: { x: 0, y: 0, z: 0 } })}
+                className="text-xs font-bold text-gray-400 dark:text-[#8090b8] hover:text-gray-600 dark:hover:text-[#b0c4e0] transition-colors"
+              >Reset</button>
+            </div>
+            {(["x", "y", "z"] as const).map((axis) => (
+              <Slider
+                key={axis}
+                label={`TCP ${axis.toUpperCase()}`}
+                value={calibration.tcpOffset[axis]}
+                min={-200} max={200} step={1} unit="mm" decimals={0}
+                onChange={(v) => setCalibration({ ...calibration, tcpOffset: { ...calibration.tcpOffset, [axis]: v } })}
+              />
+            ))}
+          </div>
         </div>
 
       </div>

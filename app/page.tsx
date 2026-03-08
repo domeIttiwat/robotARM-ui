@@ -58,7 +58,7 @@ const Dashboard = ({
   autoHome: boolean;
   onToggleAutoHome: () => void;
 }) => {
-  const { jointStates, railPos, gripperPos, effectorPose, isConnected, sendGotoPosition } = useRos();
+  const { jointStates, railPos, gripperPos, effectorPose, isConnected, sendGotoPosition, calibration } = useRos();
   const { flips } = useViewerFlips();
   const { dark, toggle: toggleDark } = useDarkMode();
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -133,7 +133,7 @@ const Dashboard = ({
       <div className="flex-1 grid grid-cols-12 gap-10 overflow-hidden">
         {/* 3D Digital Twin */}
         <section className="col-span-4 tesla-card overflow-hidden">
-          <RobotViewer3D joints={jointStates} flips={flips} />
+          <RobotViewer3D joints={jointStates} flips={flips} tcpOffset={calibration.tcpOffset} />
         </section>
 
         <section className="col-span-4 tesla-card p-8 flex flex-col overflow-hidden">

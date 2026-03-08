@@ -398,7 +398,7 @@ export default function JobEditor({
   onSave,
   onCancel,
 }: JobEditorProps) {
-  const { jointStates, railPos, gripperPos, effectorPose, setTeachMode, sendGotoPosition } =
+  const { jointStates, railPos, gripperPos, effectorPose, setTeachMode, sendGotoPosition, calibration } =
     useRos();
   const [jobName, setJobName] = useState(job?.name || "");
   const [jobDescription, setJobDescription] = useState(job?.description || "");
@@ -806,7 +806,7 @@ export default function JobEditor({
 
         {/* Middle Panel — 3D digital twin */}
         <div className="w-[40%] xl:w-[30%] border-r border-gray-100 shrink-0 overflow-hidden">
-          <RobotViewer3D joints={jointStates} flips={flips} />
+          <RobotViewer3D joints={jointStates} flips={flips} tcpOffset={calibration.tcpOffset} />
         </div>
 
         {/* Right Panel — Sortable Timeline */}
