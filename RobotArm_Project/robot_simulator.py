@@ -258,7 +258,8 @@ class RobotSimulator:
         """
         mode  = task.get("controlMode", "joint")
         speed = max(float(task.get("speed", 50)), 1.0)
-        move_time = max(1.0, (100.0 - speed) / 100.0 * 5.0)
+        # Speed-based timing: calculate from actual joint delta (fast for Jog, appropriate for large moves)
+        max_dps = (speed / 100.0) * 90.0    # max deg/sec at this speed %
 
         if mode == "effector":
             x     = float(task.get("x",     0.0))
@@ -276,6 +277,13 @@ class RobotSimulator:
 
         rail_target    = float(task.get("rail",    self.rail))
         gripper_target = float(task.get("gripper", self.gripper))
+
+        # Calculate move_time from the largest joint delta (fast for small Jog steps)
+        max_delta = max(abs(q_target[i] - self.joints[i]) for i in range(6))
+        # Also account for rail movement (scale 1mm ≈ 0.1 deg equivalent)
+        max_delta = max(max_delta, abs(rail_target - self.rail) * 0.1)
+        move_time = max(0.05, max_delta / max_dps) if max_dps > 0 else 1.0
+
         return (q_target, rail_target, gripper_target, move_time)
 
     def on_goto_position(self, msg: dict):
@@ -321,7 +329,7 @@ class RobotSimulator:
         self._stop_flag.set()
         self._pause_event.set()
         if self._move_thread and self._move_thread.is_alive():
-            self._move_thread.join(timeout=1.0)
+            self._move_thread.join(timeout=0.15)
         self._stop_flag.clear()
         self._pause_event.set()
 
@@ -542,7 +550,7 @@ class RobotSimulator:
 
         # Wait for old thread to finish (with timeout)
         if self._move_thread and self._move_thread.is_alive():
-            self._move_thread.join(timeout=1.0)
+            self._move_thread.join(timeout=0.15)
 
         # Reset flags for new move
         self._stop_flag.clear()

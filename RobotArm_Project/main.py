@@ -542,6 +542,15 @@ def step_trajectory():
         delay_ms = float(traj['tasks'][traj['idx']].get('delay', 0))
         traj['idx'] += 1
 
+        # Publish joint_states immediately so UI ref is fresh for next Jog command
+        q_now = np.rad2deg(robot.q)
+        bridge.publish_joint_states(
+            q_deg=list(q_now.astype(float)),
+            rail=sim_rail['v'],
+            gripper=sim_gripper['v'],
+        )
+        last_js_pub_t['t'] = time.time()   # reset timer to avoid double-publish
+
         # ─ CRITICAL: send status=1 immediately (must arrive < 600 ms) ─
         bridge.publish("/machine_state", {"data": 0})   # reset first
         bridge.publish("/machine_state", {"data": 2})   # REACHED — UI waitForRobotMovement() listens for this
@@ -858,7 +867,7 @@ print(f"\n{'Tip X':>10} {'Tip Y':>10} {'Tip Z':>10}  mm")
 print("-" * 36)
 
 while True:
-    env.step(0.05)
+    env.step(0.02)   # 50Hz loop — smoother Jog interpolation
     now = time.time()
 
     # ── Dispatch WS commands → callback handlers ──

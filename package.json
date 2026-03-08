@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "concurrently --names \"UI,ROS\" --prefix-colors \"blue,green\" \"next dev\" \"tsx scripts/mock-ros.ts\"",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
