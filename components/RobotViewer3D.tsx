@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useRef, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { OrbitControls, useGLTF, ContactShadows, Environment, MeshReflectorMaterial } from "@react-three/drei";
+import { OrbitControls, useGLTF, Environment } from "@react-three/drei";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import { RenderPass }     from "three/examples/jsm/postprocessing/RenderPass.js";
 import { GTAOPass }       from "three/examples/jsm/postprocessing/GTAOPass.js";
@@ -164,40 +164,6 @@ function RobotScene({ joints, flips, offsets }: { joints: number[]; flips: numbe
 }
 
 
-// ─── Transparent ground reflection ───────────────────────────────────────────
-// mirror=1 → pure reflection. AdditiveBlending → dark areas = transparent,
-// bright robot = visible. HDR sky excluded: BackgroundController forces dark bg
-// when reflector is active, so scene.background = black → reflects black → invisible.
-function ReflectorFloor({ strength, roughness }: { strength: number; roughness: number }) {
-  const meshRef = useRef<THREE.Mesh>(null);
-
-  useEffect(() => {
-    const raw = meshRef.current?.material;
-    const mats = Array.isArray(raw) ? raw : raw ? [raw] : [];
-    mats.forEach((mat) => {
-      mat.blending    = THREE.AdditiveBlending;
-      mat.depthWrite  = false;
-      mat.transparent = true;
-      mat.needsUpdate = true;
-    });
-  }, []);
-
-  return (
-    <mesh ref={meshRef} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.001, 0]}>
-      <circleGeometry args={[6, 128]} />
-      <MeshReflectorMaterial
-        mirror={1 - roughness * 0.8}
-        mixBlur={roughness}
-        mixStrength={strength}
-        blur={[Math.round(roughness * 512), Math.round(roughness * 512)]}
-        roughness={roughness}
-        resolution={1024}
-        depthScale={0}
-      />
-    </mesh>
-  );
-}
-
 // ─── Post-processing: AO + Motion Blur ───────────────────────────────────────
 // Uses Three.js native passes. priority=1 takes over the render loop from R3F.
 function PostEffects({
@@ -294,9 +260,8 @@ export default function RobotViewer3D({
   });
   const [resetTrigger, setResetTrigger] = useState(0);
 
-  const isHQ       = settingsOverride != null || hq;
-  const s          = settingsOverride ?? storedSettings;
-  const reflectorOn = isHQ && (s.reflectorEnabled ?? DEFAULT_SETTINGS.reflectorEnabled);
+  const isHQ = settingsOverride != null || hq;
+  const s    = settingsOverride ?? storedSettings;
 
   const toggleHq = () => {
     setHq((prev) => {
@@ -338,8 +303,7 @@ export default function RobotViewer3D({
         gl={{ antialias: isHQ, alpha: true }}
         style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%" }}
       >
-        {/* When reflector is on, force non-hdr so HDR sky is not reflected */}
-        <BackgroundController bgMode={reflectorOn ? "dark" : s.bgMode} />
+        <BackgroundController bgMode={s.bgMode} />
         <FogController
           enabled={s.fogEnabled ?? DEFAULT_SETTINGS.fogEnabled}
           type={s.fogType ?? DEFAULT_SETTINGS.fogType}
@@ -365,7 +329,7 @@ export default function RobotViewer3D({
 
         <Suspense fallback={<Loader />}>
           {/* When reflector is on: HDR still lights the scene but NOT shown as skybox */}
-          {isHQ && <Environment files={`/models/${s.hdrFile ?? DEFAULT_SETTINGS.hdrFile}`} background={!reflectorOn && s.bgMode === "hdr"} />}
+          {isHQ && <Environment files={`/models/${s.hdrFile ?? DEFAULT_SETTINGS.hdrFile}`} background={s.bgMode === "hdr"} />}
 
           <RobotScene joints={joints} flips={flips} offsets={s.jOffsets ?? DEFAULT_SETTINGS.jOffsets} />
 
@@ -377,30 +341,11 @@ export default function RobotViewer3D({
             onDiscovered={onMaterialsDiscovered}
           />
 
-          {isHQ && !reflectorOn && (
-            <ContactShadows
-              position={[0, 0, 0]}
-              opacity={s.shadowOpacity ?? DEFAULT_SETTINGS.shadowOpacity}
-              scale={3}
-              blur={s.shadowBlur ?? DEFAULT_SETTINGS.shadowBlur}
-              color="#000000"
-            />
-          )}
-
-          {isHQ && (s.reflectorEnabled ?? DEFAULT_SETTINGS.reflectorEnabled) && (
-            <ReflectorFloor
-              strength={s.reflectorStrength ?? DEFAULT_SETTINGS.reflectorStrength}
-              roughness={s.reflectorRoughness ?? DEFAULT_SETTINGS.reflectorRoughness}
-            />
-          )}
         </Suspense>
 
         <ExposureController exposure={isHQ ? Math.pow(2, s.exposure) : 1.0} />
         <OrbitControls enablePan={false} minDistance={0.4} maxDistance={5} target={[0, 0.3, 0]} makeDefault />
         <ResetController trigger={resetTrigger} />
-        {!(isHQ && (s.reflectorEnabled ?? DEFAULT_SETTINGS.reflectorEnabled)) && (
-          <gridHelper args={[3, 20, "#1e3a5f", "#0f2847"]} />
-        )}
 
         {isHQ && (s.aoEnabled || s.motionBlurEnabled) && (
           <PostEffects

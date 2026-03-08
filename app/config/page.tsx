@@ -325,42 +325,6 @@ export default function ConfigPage() {
             </p>
           </Section>
 
-          {/* ── Floor Shadow ───────────────────────────────────────────── */}
-          <Section title="Floor Shadow" hqOnly>
-            <Slider
-              label="Opacity"
-              value={settings.shadowOpacity ?? DEFAULT_SETTINGS.shadowOpacity} min={0} max={1} step={0.01}
-              onChange={(v) => update({ shadowOpacity: v })}
-            />
-            <Slider
-              label="Blur"
-              value={settings.shadowBlur ?? DEFAULT_SETTINGS.shadowBlur} min={0.1} max={10} step={0.1}
-              onChange={(v) => update({ shadowBlur: v })}
-            />
-          </Section>
-
-          {/* ── Ground Reflection ──────────────────────────────────────── */}
-          <Section title="Ground Reflection" hqOnly>
-            <Toggle
-              label="Enable"
-              value={settings.reflectorEnabled ?? DEFAULT_SETTINGS.reflectorEnabled}
-              onChange={(v) => update({ reflectorEnabled: v })}
-            />
-            <Slider
-              label="Strength"
-              value={settings.reflectorStrength ?? DEFAULT_SETTINGS.reflectorStrength} min={0} max={1} step={0.01}
-              onChange={(v) => update({ reflectorStrength: v })}
-            />
-            <Slider
-              label="Roughness"
-              value={settings.reflectorRoughness ?? DEFAULT_SETTINGS.reflectorRoughness} min={0} max={1} step={0.01}
-              onChange={(v) => update({ reflectorRoughness: v })}
-            />
-            <p className="text-xs text-gray-400 dark:text-[#8090b8] bg-gray-50 dark:bg-[#111d35] px-3 py-2 rounded-xl">
-              พื้นโปร่งใส · สะท้อนแค่หุ่น (ไม่สะท้อน HDR) · Roughness 0 = กระจกคมชัด, 1 = นุ่มเบลอ
-            </p>
-          </Section>
-
           {/* ── Ambient Occlusion ──────────────────────────────────────── */}
           <Section title="Ambient Occlusion" hqOnly>
             <Toggle
