@@ -805,7 +805,7 @@ export default function JobEditor({
         </div>
 
         {/* Middle Panel — 3D digital twin */}
-        <div className="w-[420px] border-r border-gray-100 shrink-0 overflow-hidden">
+        <div className="w-[40%] xl:w-[30%] border-r border-gray-100 shrink-0 overflow-hidden">
           <RobotViewer3D joints={jointStates} flips={flips} />
         </div>
 

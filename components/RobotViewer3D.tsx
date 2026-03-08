@@ -35,12 +35,17 @@ function ExposureController({ exposure }: { exposure: number }) {
 }
 
 // ─── Background controller ────────────────────────────────────────────────────
-function BackgroundController({ bgMode, bgColor }: { bgMode: ViewerSettings["bgMode"]; bgColor: string }) {
+// For color/dark: canvas is transparent (alpha:true), CSS div background shows through.
+// For HDR: Environment sets scene.background = HDR texture.
+function BackgroundController({ bgMode }: { bgMode: ViewerSettings["bgMode"] }) {
   const { scene } = useThree();
+
   useEffect(() => {
-    if (bgMode !== "hdr") scene.background = new THREE.Color(bgColor);
-    return () => { scene.background = null; };
-  }, [scene, bgMode, bgColor]);
+    if (bgMode !== "hdr") {
+      scene.background = null;
+    }
+  }, [scene, bgMode]);
+
   return null;
 }
 
@@ -301,7 +306,7 @@ export default function RobotViewer3D({
     });
   };
 
-  const canvasBg = s.bgMode !== "hdr" ? s.bgColor : "#0f172a";
+  const canvasBg = s.bgMode === "color" ? s.bgColor : "#0f172a";
 
   return (
     <div className={`w-full h-full relative ${className ?? ""}`} style={{ background: canvasBg }}>
@@ -327,9 +332,14 @@ export default function RobotViewer3D({
         </div>
       )}
 
-      <Canvas camera={{ position: [1.0, 0.8, 1.0], fov: 45 }} shadows={isHQ} gl={{ antialias: isHQ }}>
-        {/* When reflector is on, force dark bg so HDR sky is not reflected */}
-        <BackgroundController bgMode={reflectorOn ? "dark" : s.bgMode} bgColor={s.bgColor} />
+      <Canvas
+        camera={{ position: [1.0, 0.8, 1.0], fov: 45 }}
+        shadows={isHQ}
+        gl={{ antialias: isHQ, alpha: true }}
+        style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%" }}
+      >
+        {/* When reflector is on, force non-hdr so HDR sky is not reflected */}
+        <BackgroundController bgMode={reflectorOn ? "dark" : s.bgMode} />
         <FogController
           enabled={s.fogEnabled ?? DEFAULT_SETTINGS.fogEnabled}
           type={s.fogType ?? DEFAULT_SETTINGS.fogType}
@@ -367,7 +377,7 @@ export default function RobotViewer3D({
             onDiscovered={onMaterialsDiscovered}
           />
 
-          {isHQ && (
+          {isHQ && !reflectorOn && (
             <ContactShadows
               position={[0, 0, 0]}
               opacity={s.shadowOpacity ?? DEFAULT_SETTINGS.shadowOpacity}

@@ -168,7 +168,7 @@ export default function ConfigPage() {
           {/* ── Background ─────────────────────────────────────────────── */}
           <Section title="Background">
             <div className="flex gap-2">
-              {(["dark", "hdr", "color"] as ViewerSettings["bgMode"][]).map((mode) => (
+              {(["hdr", "color"] as ViewerSettings["bgMode"][]).map((mode) => (
                 <button
                   key={mode}
                   onClick={() => update({ bgMode: mode })}
@@ -178,15 +178,16 @@ export default function ConfigPage() {
                       : "bg-gray-100 dark:bg-[#1a2540] text-gray-500 dark:text-[#8090b8] hover:bg-gray-200 dark:hover:bg-[#243050]"
                   }`}
                 >
-                  {mode === "dark" ? "Dark" : mode === "hdr" ? "HDR Sky" : "Color"}
+                  {mode === "hdr" ? "HDR Sky" : "Color"}
                 </button>
               ))}
             </div>
-            {settings.bgMode === "color" && (
+            {/* Color picker — show for both "color" and "dark" (legacy) modes */}
+            {(settings.bgMode === "color" || settings.bgMode === "dark") && (
               <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-[#111d35] rounded-2xl">
                 <input
                   type="color" value={settings.bgColor}
-                  onChange={(e) => update({ bgColor: e.target.value })}
+                  onChange={(e) => update({ bgColor: e.target.value, fogColor: e.target.value })}
                   className="w-10 h-10 rounded-xl cursor-pointer border-0 bg-transparent"
                 />
                 <span className="text-sm font-mono text-gray-500 dark:text-[#8090b8]">{settings.bgColor}</span>
@@ -427,6 +428,11 @@ export default function ConfigPage() {
                 onChange={(e) => update({ fogColor: e.target.value })}
                 className="w-9 h-9 rounded-xl cursor-pointer border-0 bg-transparent shrink-0"
               />
+              <button
+                onClick={() => update({ fogColor: settings.bgMode === "color" ? settings.bgColor : DEFAULT_SETTINGS.bgColor })}
+                className="text-xs font-black text-blue-500 dark:text-blue-400 hover:text-blue-600 dark:hover:text-blue-300"
+                title="Sync fog color with background color"
+              >= BG</button>
               <button
                 onClick={() => update({ fogColor: DEFAULT_SETTINGS.fogColor })}
                 className="text-xs text-gray-400 dark:text-[#8090b8] hover:text-gray-600 dark:hover:text-[#b0c4e0]"
