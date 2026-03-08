@@ -325,6 +325,20 @@ export default function ConfigPage() {
             </p>
           </Section>
 
+          {/* ── Floor Shadow ───────────────────────────────────────────── */}
+          <Section title="Floor Shadow" hqOnly>
+            <Slider
+              label="Opacity"
+              value={settings.shadowOpacity ?? DEFAULT_SETTINGS.shadowOpacity} min={0} max={1} step={0.01}
+              onChange={(v) => update({ shadowOpacity: v })}
+            />
+            <Slider
+              label="Blur"
+              value={settings.shadowBlur ?? DEFAULT_SETTINGS.shadowBlur} min={0.1} max={10} step={0.1}
+              onChange={(v) => update({ shadowBlur: v })}
+            />
+          </Section>
+
           {/* ── Ambient Occlusion ──────────────────────────────────────── */}
           <Section title="Ambient Occlusion" hqOnly>
             <Toggle

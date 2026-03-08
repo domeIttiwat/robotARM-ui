@@ -14,6 +14,8 @@ export interface ViewerSettings {
   bgMode: "dark" | "hdr" | "color";
   bgColor: string;          // hex color
   matColors: Record<string, string>; // material name → hex color (keyed by actual GLB material name)
+  shadowOpacity: number;    // 0-1  (floor shadow opacity, HQ only)
+  shadowBlur: number;       // 0.1-10 (floor shadow blur, HQ only)
   jOffsets: number[];       // per-joint display offset in degrees (J1-J6), visual only
   hdrFile: string;          // filename of the active HDR environment map in /models/
   fogEnabled: boolean;
@@ -38,6 +40,8 @@ export const DEFAULT_SETTINGS: ViewerSettings = {
   bgMode: "dark",
   bgColor: "#0f172a",
   matColors: {},  // empty = use original GLTF material colors
+  shadowOpacity: 0.5,
+  shadowBlur: 1.5,
   jOffsets: [0, 0, 0, 0, 0, 0],
   hdrFile: "ferndale_studio_12_4k.hdr",
   fogEnabled: false,

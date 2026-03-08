@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useRef, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { OrbitControls, useGLTF, Environment } from "@react-three/drei";
+import { OrbitControls, useGLTF, ContactShadows, Environment } from "@react-three/drei";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import { RenderPass }     from "three/examples/jsm/postprocessing/RenderPass.js";
 import { GTAOPass }       from "three/examples/jsm/postprocessing/GTAOPass.js";
@@ -341,11 +341,21 @@ export default function RobotViewer3D({
             onDiscovered={onMaterialsDiscovered}
           />
 
+          {isHQ && (
+            <ContactShadows
+              position={[0, 0, 0]}
+              opacity={s.shadowOpacity ?? DEFAULT_SETTINGS.shadowOpacity}
+              scale={3}
+              blur={s.shadowBlur ?? DEFAULT_SETTINGS.shadowBlur}
+              color="#000000"
+            />
+          )}
         </Suspense>
 
         <ExposureController exposure={isHQ ? Math.pow(2, s.exposure) : 1.0} />
         <OrbitControls enablePan={false} minDistance={0.4} maxDistance={5} target={[0, 0.3, 0]} makeDefault />
         <ResetController trigger={resetTrigger} />
+        <gridHelper args={[3, 20, "#1e3a5f", "#0f2847"]} />
 
         {isHQ && (s.aoEnabled || s.motionBlurEnabled) && (
           <PostEffects
