@@ -450,23 +450,25 @@ class RobotSimulator:
 
     def compute_fk(self, joints: list) -> tuple:
         """
-        Simple planar 3-link FK for display purposes.
+        Planar 3-link FK.  L3 extends along the forearm direction (same as L2),
+        so we treat L2_eff = L2 + L3 as a single effective link.
 
         Returns (x, y, z, roll, pitch, yaw) in mm and degrees.
         TCP offset (tcp_x/y/z) is added after.
         """
         j1, j2, j3, j4, j5, j6 = joints
 
-        j1r = math.radians(j1)
-        j2r = math.radians(j2)
-        j3r = math.radians(j3)
+        j1r  = math.radians(j1)
+        j2r  = math.radians(j2)
+        j23r = j2r + math.radians(j3)
 
-        # Reach in the plane of J1
-        reach = L1 * math.cos(j2r) + L2 * math.cos(j2r + j3r) + L3
+        L2_eff = L2 + L3   # L3 continues in the same forearm direction
+
+        reach = L1 * math.cos(j2r) + L2_eff * math.cos(j23r)
 
         x = reach * math.cos(j1r)
         y = reach * math.sin(j1r)
-        z = BASE_HEIGHT + L1 * math.sin(j2r) + L2 * math.sin(j2r + j3r)
+        z = BASE_HEIGHT + L1 * math.sin(j2r) + L2_eff * math.sin(j23r)
 
         roll  = j4    # wrist roll
         pitch = j5    # wrist pitch
@@ -483,44 +485,46 @@ class RobotSimulator:
                   roll: float, pitch: float, yaw: float,
                   seed: list = None) -> list:
         """
-        Analytical IK for a 3-link planar arm.
+        Analytical IK for a 3-link planar arm where L3 extends along the same
+        forearm direction as L2 (L2_eff = L2 + L3 treated as single link).
 
         Returns [j1, j2, j3, j4, j5, j6] in degrees, or None on failure.
 
-        Joint 1  (J1) = atan2(y, x)                      — base rotation
-        Joints 2/3    = 2-link IK in the vertical plane   — shoulder/elbow
+        Joint 1  (J1) = atan2(y, x)                       — base rotation
+        Joints 2/3    = 2-link IK with L2_eff in the vertical plane
         Joint 4  (J4) = roll  (wrist)
         Joint 5  (J5) = pitch (wrist)
-        Joint 6  (J6) = 0     (kept at zero; no yaw DOF in this model)
+        Joint 6  (J6) = 0     (no independent yaw DOF in this model)
         """
-        # Remove TCP offset to get the wrist position
+        # Remove TCP offset
         wx = x - self.tcp_x
         wy = y - self.tcp_y
         wz = z - self.tcp_z
 
+        L2_eff = L2 + L3   # effective second link (forearm + TCP)
+
         # J1: base rotation
         j1 = math.degrees(math.atan2(wy, wx))
 
-        # 2D reach from base axis to wrist (subtract L3 from reach)
-        r   = math.hypot(wx, wy) - L3
-        h   = wz - BASE_HEIGHT
+        # 2D problem in the arm's vertical plane
+        r = math.hypot(wx, wy)      # total horizontal reach (no L3 subtraction)
+        h = wz - BASE_HEIGHT
 
-        # Distance from shoulder to wrist
         d = math.hypot(r, h)
 
-        # Check reachability
-        if d > L1 + L2 or d < abs(L1 - L2):
-            return None   # out of reach → singularity
+        # Reachability check
+        if d > L1 + L2_eff or d < abs(L1 - L2_eff):
+            return None   # out of reach
 
-        # Law of cosines
-        cos_j3 = (d * d - L1 * L1 - L2 * L2) / (2.0 * L1 * L2)
-        cos_j3 = max(-1.0, min(1.0, cos_j3))   # clamp numerical errors
+        # Law of cosines (2-link: L1 and L2_eff)
+        cos_j3 = (d * d - L1 * L1 - L2_eff * L2_eff) / (2.0 * L1 * L2_eff)
+        cos_j3 = max(-1.0, min(1.0, cos_j3))
 
-        # Elbow-up solution
-        j3_rad = -math.acos(cos_j3)    # negative = elbow-up
+        # Elbow-up solution (negative j3 = elbow up)
+        j3_rad = -math.acos(cos_j3)
         j2_rad = math.atan2(h, r) - math.atan2(
-            L2 * math.sin(j3_rad),
-            L1 + L2 * math.cos(j3_rad),
+            L2_eff * math.sin(j3_rad),
+            L1 + L2_eff * math.cos(j3_rad),
         )
 
         j2 = math.degrees(j2_rad)
@@ -529,7 +533,7 @@ class RobotSimulator:
         # Wrist joints
         j4 = roll
         j5 = pitch
-        j6 = 0.0   # no yaw in this simplified model
+        j6 = 0.0
 
         return [j1, j2, j3, j4, j5, j6]
 

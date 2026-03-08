@@ -63,33 +63,49 @@ function publishJointStates(positions: number[]) {
   subs.forEach((sub) => { if (sub.readyState === WebSocket.OPEN) sub.send(payload); });
 }
 
+const FK_L1 = 250, FK_L2 = 220, FK_L3 = 160, FK_BASE = 250;
+const FK_L2EFF = FK_L2 + FK_L3; // L3 extends along same forearm direction as L2
+
+/** Forward kinematics: joint angles (degrees) → TCP pose (mm / degrees) */
+function computeFK(positions: number[]): { x: number; y: number; z: number; roll: number; pitch: number; yaw: number } {
+  const j1r = (positions[0] ?? 0) * Math.PI / 180;
+  const j2r = (positions[1] ?? 0) * Math.PI / 180;
+  const j3r = (positions[2] ?? 0) * Math.PI / 180;
+  const j23r = j2r + j3r;
+  const reach = FK_L1 * Math.cos(j2r) + FK_L2EFF * Math.cos(j23r);
+  return {
+    x:     Math.round(reach * Math.cos(j1r) * 10) / 10,
+    y:     Math.round(reach * Math.sin(j1r) * 10) / 10,
+    z:     Math.round((FK_BASE + FK_L1 * Math.sin(j2r) + FK_L2EFF * Math.sin(j23r)) * 10) / 10,
+    roll:  Math.round((positions[3] ?? 0) * 10) / 10,
+    pitch: Math.round((positions[4] ?? 0) * 10) / 10,
+    yaw:   Math.round((positions[0] ?? 0) * 10) / 10,
+  };
+}
+
+/** Inverse kinematics: TCP pose → [j1,j2,j3,j4,j5,j6] degrees, or null if unreachable */
+function simpleIK(x: number, y: number, z: number, roll = 0, pitch = 0): number[] | null {
+  const j1 = Math.atan2(y, x) * 180 / Math.PI;
+  const r = Math.hypot(x, y);
+  const h = z - FK_BASE;
+  const d = Math.hypot(r, h);
+  if (d > FK_L1 + FK_L2EFF || d < Math.abs(FK_L1 - FK_L2EFF)) return null;
+  let cosJ3 = (d * d - FK_L1 * FK_L1 - FK_L2EFF * FK_L2EFF) / (2 * FK_L1 * FK_L2EFF);
+  cosJ3 = Math.max(-1, Math.min(1, cosJ3));
+  const j3r = -Math.acos(cosJ3); // elbow-up
+  const j2r = Math.atan2(h, r) - Math.atan2(FK_L2EFF * Math.sin(j3r), FK_L1 + FK_L2EFF * Math.cos(j3r));
+  return [j1, j2r * 180 / Math.PI, j3r * 180 / Math.PI, roll, pitch, 0];
+}
+
 function publishFakeEEPose(positions: number[]) {
   const eeSubs = subscribers.get("/end_effector_pose");
   if (!eeSubs || eeSubs.size === 0) return;
-
-  const j1Rad = (positions[0] ?? 0) * Math.PI / 180;
-  const j2Rad = (positions[1] ?? 0) * Math.PI / 180;
-  const j3Rad = (positions[2] ?? 0) * Math.PI / 180;
-  const j4Rad = (positions[3] ?? 0) * Math.PI / 180;
-  const j5Rad = (positions[4] ?? 0) * Math.PI / 180;
-  const L1 = 250, L2 = 220, L3 = 160;
-  const reach = L1 * Math.cos(j2Rad) + L2 * Math.cos(j2Rad + j3Rad) + L3;
-
+  const pose = computeFK(positions);
   const payload = JSON.stringify({
     op: "publish",
     topic: "/end_effector_pose",
-    msg: {
-      data: JSON.stringify({
-        x:     Math.round(reach * Math.cos(j1Rad) * 10) / 10,
-        y:     Math.round(reach * Math.sin(j1Rad) * 10) / 10,
-        z:     Math.max(0, Math.round((250 + L1 * Math.sin(j2Rad) + L2 * Math.sin(j2Rad + j3Rad)) * 10) / 10),
-        roll:  Math.round(j4Rad * 180 / Math.PI * 10) / 10,
-        pitch: Math.round(j5Rad * 180 / Math.PI * 10) / 10,
-        yaw:   Math.round(j1Rad * 180 / Math.PI * 10) / 10,
-      }),
-    },
+    msg: { data: JSON.stringify(pose) },
   });
-
   eeSubs.forEach((sub) => { if (sub.readyState === WebSocket.OPEN) sub.send(payload); });
 }
 
@@ -114,11 +130,27 @@ function handleGotoPositionMock(taskData: any) {
   stopAutoPublish();
   if (jogInactivityTimer) clearTimeout(jogInactivityTimer);
 
-  mockJointPositions = [
-    taskData.j1 ?? 0, taskData.j2 ?? 0, taskData.j3 ?? 0,
-    taskData.j4 ?? 0, taskData.j5 ?? 0, taskData.j6 ?? 0,
-    taskData.rail ?? 0, taskData.gripper ?? 0,
-  ];
+  if (taskData.controlMode === "effector") {
+    // Run IK to find joint targets from Cartesian target
+    const result = simpleIK(
+      taskData.x ?? 0, taskData.y ?? 0, taskData.z ?? 0,
+      taskData.roll ?? 0, taskData.pitch ?? 0,
+    );
+    if (result) {
+      mockJointPositions = [
+        ...result,
+        taskData.rail    ?? mockJointPositions[6],
+        taskData.gripper ?? mockJointPositions[7],
+      ];
+    }
+    // else: IK failed (singularity/out-of-reach) — keep current position
+  } else {
+    mockJointPositions = [
+      taskData.j1 ?? 0, taskData.j2 ?? 0, taskData.j3 ?? 0,
+      taskData.j4 ?? 0, taskData.j5 ?? 0, taskData.j6 ?? 0,
+      taskData.rail ?? 0, taskData.gripper ?? 0,
+    ];
+  }
 
   publishJointStates(mockJointPositions);
   publishFakeEEPose(mockJointPositions);
