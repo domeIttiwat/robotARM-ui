@@ -69,10 +69,83 @@ function Toggle({ label, value, onChange }: { label: string; value: boolean; onC
   );
 }
 
+// ── TCP axis row: slider + inline edit + flip toggle ─────────────────────────
+function TCPAxisRow({
+  label, value, flipped,
+  onValueChange, onFlipChange,
+}: {
+  label: string; value: number; flipped: boolean;
+  onValueChange: (v: number) => void; onFlipChange: (v: boolean) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+
+  const commit = () => {
+    const n = parseFloat(draft);
+    if (!isNaN(n)) onValueChange(Math.max(-200, Math.min(200, n)));
+    setEditing(false);
+  };
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-2">
+        <span className="text-sm font-semibold text-gray-700 dark:text-[#b0c4e0] w-16 shrink-0">TCP {label}</span>
+
+        {/* Editable value badge */}
+        {editing ? (
+          <input
+            autoFocus
+            type="number"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={commit}
+            onKeyDown={(e) => { if (e.key === "Enter") commit(); if (e.key === "Escape") setEditing(false); }}
+            className="w-20 text-xs font-mono text-center bg-blue-50 dark:bg-blue-900/30 border border-blue-400 dark:border-blue-500 rounded-lg px-1.5 py-0.5 outline-none"
+          />
+        ) : (
+          <button
+            onClick={() => { setDraft(value.toFixed(0)); setEditing(true); }}
+            title="คลิกเพื่อกรอกค่า"
+            className="text-xs font-mono text-gray-500 dark:text-[#8090b8] bg-gray-100 dark:bg-[#1a2540] px-2 py-0.5 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:text-blue-600 dark:hover:text-blue-300 transition-colors cursor-text"
+            suppressHydrationWarning
+          >
+            {value.toFixed(0)} mm
+          </button>
+        )}
+
+        <div className="flex-1" />
+
+        {/* Flip toggle */}
+        <button
+          onClick={() => onFlipChange(!flipped)}
+          title="Flip axis direction"
+          className={`text-[10px] font-black px-2 py-1 rounded-lg transition-colors ${
+            flipped
+              ? "bg-orange-500 text-white"
+              : "bg-gray-100 dark:bg-[#1a2540] text-gray-400 dark:text-[#8090b8] hover:bg-gray-200 dark:hover:bg-[#243050]"
+          }`}
+          suppressHydrationWarning
+        >
+          {flipped ? "−1×" : "+1×"}
+        </button>
+      </div>
+
+      <input
+        type="range" min={-200} max={200} step={1} value={value}
+        onChange={(e) => onValueChange(parseFloat(e.target.value))}
+        className="w-full h-1.5 bg-gray-200 dark:bg-[#1a2540] rounded-full appearance-none cursor-pointer accent-blue-600"
+      />
+      <div className="flex justify-between text-[10px] text-gray-400 dark:text-[#6878a8] font-mono">
+        <span>−200 mm</span><span>+200 mm</span>
+      </div>
+    </div>
+  );
+}
+
 // ── Page component ────────────────────────────────────────────────────────────
 export default function ConfigPage() {
   const router = useRouter();
-  const { jointStates, calibration, setCalibration } = useRos();
+  const { jointStates, calibration, setCalibration, effectiveTcpOffset } = useRos();
   const { flips, toggleFlip } = useViewerFlips();
   const { settings, update, reset } = useViewerSettings();
 
@@ -520,7 +593,8 @@ export default function ConfigPage() {
           <RobotViewer3D
             joints={jointStates}
             flips={flips}
-            tcpOffset={calibration.tcpOffset}
+            tcpOffset={effectiveTcpOffset}
+            tcpFlips={calibration.tcpFlips}
             settingsOverride={settings}
             onMaterialsDiscovered={handleMaterialsDiscovered}
           />
@@ -538,12 +612,13 @@ export default function ConfigPage() {
               >Reset</button>
             </div>
             {(["x", "y", "z"] as const).map((axis) => (
-              <Slider
+              <TCPAxisRow
                 key={axis}
-                label={`TCP ${axis.toUpperCase()}`}
+                label={axis.toUpperCase()}
                 value={calibration.tcpOffset[axis]}
-                min={-200} max={200} step={1} unit="mm" decimals={0}
-                onChange={(v) => setCalibration({ ...calibration, tcpOffset: { ...calibration.tcpOffset, [axis]: v } })}
+                flipped={calibration.tcpFlips?.[axis] ?? false}
+                onValueChange={(v) => setCalibration({ ...calibration, tcpOffset: { ...calibration.tcpOffset, [axis]: v } })}
+                onFlipChange={(v) => setCalibration({ ...calibration, tcpFlips: { ...calibration.tcpFlips, [axis]: v } })}
               />
             ))}
           </div>

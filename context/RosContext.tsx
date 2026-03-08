@@ -13,12 +13,14 @@ export interface CalibrationData {
   offsets: number[];  // [j1, j2, j3, j4, j5, j6, rail, gripper]
   flips: boolean[];   // [j1, j2, j3, j4, j5, j6, rail, gripper]
   tcpOffset: { x: number; y: number; z: number };  // Tool center point offset in mm
+  tcpFlips: { x: boolean; y: boolean; z: boolean }; // Flip sign of each TCP axis
 }
 
 const DEFAULT_CALIBRATION: CalibrationData = {
   offsets: [0, 0, 0, 0, 0, 0, 0, 0],
   flips: [false, false, false, false, false, false, false, false],
   tcpOffset: { x: 0, y: 0, z: 0 },
+  tcpFlips: { x: false, y: false, z: false },
 };
 
 export interface EffectorPose {
@@ -52,6 +54,7 @@ interface RosContextType {
   setTestMode: (v: boolean) => void;
   calibration: CalibrationData;
   setCalibration: (data: CalibrationData) => void;
+  effectiveTcpOffset: { x: number; y: number; z: number };
 }
 
 const RosContext = createContext<RosContextType | null>(null);
@@ -75,20 +78,20 @@ export const RosProvider = ({ children }: { children: React.ReactNode }) => {
   const [currentTaskIndex, setCurrentTaskIndex] = useState(0);
   const [isTestMode, setIsTestMode] = useState(false);
 
-  const [calibration, setCalibrationState] = useState<CalibrationData>(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("robotCalibration");
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved);
-          // Migrate old calibration data that doesn't have tcpOffset
-          if (!parsed.tcpOffset) parsed.tcpOffset = { x: 0, y: 0, z: 0 };
-          return parsed;
-        } catch {}
-      }
+  const [calibration, setCalibrationState] = useState<CalibrationData>(DEFAULT_CALIBRATION);
+
+  // Load from localStorage after mount (avoids SSR/client hydration mismatch)
+  useEffect(() => {
+    const saved = localStorage.getItem("robotCalibration");
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (!parsed.tcpOffset) parsed.tcpOffset = { x: 0, y: 0, z: 0 };
+        if (!parsed.tcpFlips)  parsed.tcpFlips  = { x: false, y: false, z: false };
+        setCalibrationState(parsed);
+      } catch {}
     }
-    return DEFAULT_CALIBRATION;
-  });
+  }, []);
 
   // Ref so subscriber closure always sees latest calibration without re-subscribing
   const calibrationRef = useRef(calibration);
@@ -209,7 +212,14 @@ export const RosProvider = ({ children }: { children: React.ReactNode }) => {
     return () => ros?.close();
   }, []);
 
-  // Publish /tool_config whenever TCP offset changes
+  // Effective TCP offset after applying per-axis flip signs
+  const effectiveTcpOffset = {
+    x: (calibration.tcpFlips?.x ? -1 : 1) * calibration.tcpOffset.x,
+    y: (calibration.tcpFlips?.y ? -1 : 1) * calibration.tcpOffset.y,
+    z: (calibration.tcpFlips?.z ? -1 : 1) * calibration.tcpOffset.z,
+  };
+
+  // Publish /tool_config whenever TCP offset changes (raw value, no flip — flip is UI-only)
   useEffect(() => {
     if (!ros) return;
     const topic = new ROSLIB.Topic({
@@ -217,13 +227,11 @@ export const RosProvider = ({ children }: { children: React.ReactNode }) => {
       name: "/tool_config",
       messageType: "std_msgs/String",
     });
-    topic.publish({
-      data: JSON.stringify({
-        tcp_x: calibration.tcpOffset.x,
-        tcp_y: calibration.tcpOffset.y,
-        tcp_z: calibration.tcpOffset.z,
-      }),
-    });
+    topic.publish({ data: JSON.stringify({
+      tcp_x: calibration.tcpOffset.x,
+      tcp_y: calibration.tcpOffset.y,
+      tcp_z: calibration.tcpOffset.z,
+    }) });
   }, [calibration.tcpOffset, ros]);
 
   const sendJob = useCallback(
@@ -253,6 +261,7 @@ export const RosProvider = ({ children }: { children: React.ReactNode }) => {
   const sendGotoPosition = useCallback(
     (taskData: any) => {
       if (!ros) return;
+      const cal = calibrationRef.current;
       const rawTask = {
         ...taskData,
         j1: applyInverse(taskData.j1, 0),
@@ -268,6 +277,10 @@ export const RosProvider = ({ children }: { children: React.ReactNode }) => {
           x: taskData.x, y: taskData.y, z: taskData.z,
           roll: taskData.roll, pitch: taskData.pitch, yaw: taskData.yaw,
         }),
+        // Always send TCP offset so robot always has latest tool config
+        tcp_x: cal.tcpOffset.x,
+        tcp_y: cal.tcpOffset.y,
+        tcp_z: cal.tcpOffset.z,
       };
       const topic = new ROSLIB.Topic({
         ros,
@@ -369,6 +382,7 @@ export const RosProvider = ({ children }: { children: React.ReactNode }) => {
         setTestMode: setIsTestMode,
         calibration,
         setCalibration,
+        effectiveTcpOffset,
       }}
     >
       {children}

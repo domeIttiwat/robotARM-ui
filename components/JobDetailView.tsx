@@ -149,6 +149,7 @@ export default function JobDetailView({ job, onBack, onUpdate, autoStart = false
     gripperPos,
     effectorPose,
     calibration,
+    effectiveTcpOffset,
   } = useRos();
 
   // Local execution state — fully decoupled from RosContext so robot feedback
@@ -687,7 +688,7 @@ export default function JobDetailView({ job, onBack, onUpdate, autoStart = false
 
       {/* ── Middle panel: 3D digital twin ─────────────────── */}
       <div className="w-[40%] xl:w-[30%] border-r border-gray-100 shrink-0 overflow-hidden">
-        <RobotViewer3D joints={jointStates} flips={flips} tcpOffset={calibration.tcpOffset} />
+        <RobotViewer3D joints={jointStates} flips={flips} tcpOffset={effectiveTcpOffset} tcpFlips={calibration.tcpFlips} />
       </div>
 
       {/* ── Right panel: execution controls + task list ───── */}

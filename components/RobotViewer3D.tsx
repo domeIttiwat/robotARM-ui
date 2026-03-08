@@ -167,10 +167,15 @@ function RobotScene({ joints, flips, offsets }: { joints: number[]; flips: numbe
 // ─── TCP axis indicator ───────────────────────────────────────────────────────
 // Shows XYZ axes at the end-effector (J6 tip + TCP offset).
 // Persists at last known position even when the model is stationary.
-function TCPAxes({ tcpOffset }: { tcpOffset: { x: number; y: number; z: number } }) {
+function TCPAxes({
+  tcpOffset,
+  tcpFlips = { x: false, y: false, z: false },
+}: {
+  tcpOffset: { x: number; y: number; z: number };
+  tcpFlips?: { x: boolean; y: boolean; z: boolean };
+}) {
   const { scene } = useThree();
   const groupRef = useRef<THREE.Group>(null);
-  // Pre-allocate to avoid GC pressure in render loop
   const _pos  = useRef(new THREE.Vector3());
   const _quat = useRef(new THREE.Quaternion());
   const _off  = useRef(new THREE.Vector3());
@@ -182,12 +187,16 @@ function TCPAxes({ tcpOffset }: { tcpOffset: { x: number; y: number; z: number }
     j6.getWorldPosition(_pos.current);
     j6.getWorldQuaternion(_quat.current);
 
-    // Apply TCP offset in J6's local frame (tool frame) → world space
     _off.current.set(tcpOffset.x / 1000, tcpOffset.y / 1000, tcpOffset.z / 1000);
     _off.current.applyQuaternion(_quat.current);
 
     groupRef.current.position.copy(_pos.current).add(_off.current);
     groupRef.current.quaternion.copy(_quat.current);
+    groupRef.current.scale.set(
+      tcpFlips.x ? -1 : 1,
+      tcpFlips.y ? -1 : 1,
+      tcpFlips.z ? -1 : 1,
+    );
   });
 
   return (
@@ -273,6 +282,8 @@ export interface RobotViewer3DProps {
   className?: string;
   /** TCP offset from J6 tip in mm (X/Y/Z in J6 local frame) */
   tcpOffset?: { x: number; y: number; z: number };
+  /** Which TCP axes to flip in the 3D visualization */
+  tcpFlips?: { x: boolean; y: boolean; z: boolean };
   /** If provided, always use HQ mode with these exact settings (used by config page preview) */
   settingsOverride?: ViewerSettings;
   /** Called once (and on model reload) with the list of material names found in the GLB */
@@ -284,6 +295,7 @@ export default function RobotViewer3D({
   flips  = [1, 1, 1, 1, 1, 1],
   className,
   tcpOffset = { x: 0, y: 0, z: 0 },
+  tcpFlips  = { x: false, y: false, z: false },
   settingsOverride,
   onMaterialsDiscovered,
 }: RobotViewer3DProps) {
@@ -387,7 +399,7 @@ export default function RobotViewer3D({
             />
           )}
 
-          <TCPAxes tcpOffset={tcpOffset} />
+          <TCPAxes tcpOffset={tcpOffset} tcpFlips={tcpFlips} />
         </Suspense>
 
         <ExposureController exposure={isHQ ? Math.pow(2, s.exposure) : 1.0} />

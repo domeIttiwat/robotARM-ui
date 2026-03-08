@@ -1,78 +1,98 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
-import { X, Gamepad2 } from "lucide-react";
+import { X, Gamepad2, Home } from "lucide-react";
 import { useRos } from "@/context/RosContext";
 
 type Tab = "joint" | "effector";
-
-const JOINT_STEP   = 1;   // degrees
-const RAIL_STEP    = 5;   // mm
-const GRIPPER_STEP = 5;   // %
-const XYZ_STEP     = 5;   // mm
-const RPY_STEP     = 1;   // degrees
 const JOG_INTERVAL_MS = 100;
 
 const JOINT_AXES = [
-  { key: "j1",      label: "J1",      unit: "°",  step: JOINT_STEP,   color: "bg-gray-100 text-gray-700"     },
-  { key: "j2",      label: "J2",      unit: "°",  step: JOINT_STEP,   color: "bg-gray-100 text-gray-700"     },
-  { key: "j3",      label: "J3",      unit: "°",  step: JOINT_STEP,   color: "bg-gray-100 text-gray-700"     },
-  { key: "j4",      label: "J4",      unit: "°",  step: JOINT_STEP,   color: "bg-gray-100 text-gray-700"     },
-  { key: "j5",      label: "J5",      unit: "°",  step: JOINT_STEP,   color: "bg-gray-100 text-gray-700"     },
-  { key: "j6",      label: "J6",      unit: "°",  step: JOINT_STEP,   color: "bg-gray-100 text-gray-700"     },
-  { key: "rail",    label: "Rail",    unit: "mm", step: RAIL_STEP,    color: "bg-blue-100 text-blue-700"     },
-  { key: "gripper", label: "Gripper", unit: "%",  step: GRIPPER_STEP, color: "bg-orange-100 text-orange-700" },
+  { key: "j1",      label: "J1",      unit: "°",  step: 1,  min: -180, max: 180,  color: "bg-gray-100 text-gray-700"     },
+  { key: "j2",      label: "J2",      unit: "°",  step: 1,  min: -180, max: 180,  color: "bg-gray-100 text-gray-700"     },
+  { key: "j3",      label: "J3",      unit: "°",  step: 1,  min: -180, max: 180,  color: "bg-gray-100 text-gray-700"     },
+  { key: "j4",      label: "J4",      unit: "°",  step: 1,  min: -180, max: 180,  color: "bg-gray-100 text-gray-700"     },
+  { key: "j5",      label: "J5",      unit: "°",  step: 1,  min: -180, max: 180,  color: "bg-gray-100 text-gray-700"     },
+  { key: "j6",      label: "J6",      unit: "°",  step: 1,  min: -180, max: 180,  color: "bg-gray-100 text-gray-700"     },
+  { key: "rail",    label: "Rail",    unit: "mm", step: 5,  min: 0,    max: 1000, color: "bg-blue-100 text-blue-700"     },
+  { key: "gripper", label: "Gripper", unit: "%",  step: 5,  min: 0,    max: 100,  color: "bg-orange-100 text-orange-700" },
 ] as const;
 
 type JointKey = typeof JOINT_AXES[number]["key"];
 
 const XYZ_AXES = [
-  { key: "x", label: "X", unit: "mm", step: XYZ_STEP, color: "bg-red-100 text-red-700"    },
-  { key: "y", label: "Y", unit: "mm", step: XYZ_STEP, color: "bg-green-100 text-green-700" },
-  { key: "z", label: "Z", unit: "mm", step: XYZ_STEP, color: "bg-blue-100 text-blue-700"  },
+  { key: "x", label: "Tip X", unit: "mm", step: 5, min: -700, max: 700, color: "bg-red-100 text-red-700"    },
+  { key: "y", label: "Tip Y", unit: "mm", step: 5, min: -700, max: 700, color: "bg-green-100 text-green-700" },
+  { key: "z", label: "Tip Z", unit: "mm", step: 5, min: 0,    max: 800, color: "bg-blue-100 text-blue-700"  },
 ] as const;
 
 const RPY_AXES = [
-  { key: "roll",  label: "Roll",  unit: "°", step: RPY_STEP, color: "bg-purple-100 text-purple-700" },
-  { key: "pitch", label: "Pitch", unit: "°", step: RPY_STEP, color: "bg-purple-100 text-purple-700" },
-  { key: "yaw",   label: "Yaw",   unit: "°", step: RPY_STEP, color: "bg-purple-100 text-purple-700" },
+  { key: "roll",  label: "Tip Rx", unit: "°", step: 1, min: -180, max: 180, color: "bg-purple-100 text-purple-700" },
+  { key: "pitch", label: "Tip Ry", unit: "°", step: 1, min: -180, max: 180, color: "bg-purple-100 text-purple-700" },
+  { key: "yaw",   label: "Tip Rz", unit: "°", step: 1, min: -180, max: 180, color: "bg-purple-100 text-purple-700" },
 ] as const;
 
-// ── Sub-component ──────────────────────────────────────────────────────────────
+// ── AxisControl ────────────────────────────────────────────────────────────────
+// ± buttons only — accumulate target in local ref (not robot feedback).
 interface AxisControlProps {
-  label: string;
-  unit: string;
-  color: string;
-  currentValue: number;
-  onPlus: () => void;
-  onMinus: () => void;
-  onStop: () => void;
+  label: string; unit: string; color: string;
+  currentValue: number; min: number; max: number; step: number;
+  onSet: (value: number) => void;
 }
 
-function AxisControl({ label, unit, color, currentValue, onPlus, onMinus, onStop }: AxisControlProps) {
-  const btnCls =
-    "w-14 h-14 rounded-2xl bg-white dark:bg-[#1a2540] hover:bg-gray-100 dark:hover:bg-[#243050] active:bg-gray-200 dark:active:bg-[#2d3e60] border border-gray-200 dark:border-white/8 text-2xl font-black flex items-center justify-center transition-colors select-none touch-none";
+function AxisControl({ label, unit, color, currentValue, min, max, step, onSet }: AxisControlProps) {
+  const targetRef   = useRef(currentValue);
+  const isHolding   = useRef(false);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const onSetRef    = useRef(onSet);
+  useEffect(() => { onSetRef.current = onSet; }, [onSet]);
 
-  const holdProps = (action: () => void) => ({
-    onMouseDown:   action,
-    onMouseUp:     onStop,
-    onMouseLeave:  onStop,
-    onTouchStart:  (e: React.TouchEvent) => { e.preventDefault(); action(); },
-    onTouchEnd:    onStop,
-    onTouchCancel: onStop,
+  // Sync local target with robot only when idle
+  useEffect(() => {
+    if (!isHolding.current) targetRef.current = Math.max(min, Math.min(max, currentValue));
+  }, [currentValue, min, max]);
+
+  useEffect(() => () => stopHold(), []);
+
+  const stopHold = () => {
+    if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
+    isHolding.current = false;
+  };
+
+  const startHold = (direction: 1 | -1) => {
+    isHolding.current = true;
+    const fire = () => {
+      const next = Math.max(min, Math.min(max, targetRef.current + step * direction));
+      targetRef.current = next;
+      onSetRef.current(next);
+    };
+    fire();
+    intervalRef.current = setInterval(fire, JOG_INTERVAL_MS);
+  };
+
+  const btnCls =
+    "w-10 h-10 rounded-xl bg-white dark:bg-[#1a2540] hover:bg-gray-100 dark:hover:bg-[#243050] active:bg-gray-200 dark:active:bg-[#2d3e60] border border-gray-200 dark:border-white/8 text-xl font-black flex items-center justify-center transition-colors select-none touch-none";
+
+  const holdProps = (dir: 1 | -1) => ({
+    onMouseDown:   () => startHold(dir),
+    onMouseUp:     stopHold,
+    onMouseLeave:  stopHold,
+    onTouchStart:  (e: React.TouchEvent) => { e.preventDefault(); startHold(dir); },
+    onTouchEnd:    stopHold,
+    onTouchCancel: stopHold,
     onContextMenu: (e: React.MouseEvent) => e.preventDefault(),
   });
 
   return (
-    <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-[#111d35] rounded-2xl select-none">
-      <span className={`inline-flex items-center justify-center w-16 h-9 rounded-full text-xs font-black shrink-0 ${color}`}>
+    <div className="px-3 py-2.5 bg-gray-50 dark:bg-[#111d35] rounded-2xl flex items-center gap-2 select-none">
+      <span className={`inline-flex items-center justify-center w-14 h-8 rounded-full text-[11px] font-black shrink-0 ${color}`}>
         {label}
       </span>
       <span className="flex-1 font-mono font-black text-sm tabular-nums text-gray-600 dark:text-[#b0c4e0]">
         {currentValue.toFixed(1)}{unit}
       </span>
-      <button {...holdProps(onMinus)} className={btnCls}>−</button>
-      <button {...holdProps(onPlus)}  className={btnCls}>+</button>
+      <button {...holdProps(-1)} className={btnCls}>−</button>
+      <button {...holdProps(+1)} className={btnCls}>+</button>
     </div>
   );
 }
@@ -80,97 +100,82 @@ function AxisControl({ label, unit, color, currentValue, onPlus, onMinus, onStop
 // ── Main Component ─────────────────────────────────────────────────────────────
 export default function JogControlPanel({ onClose }: { onClose: () => void }) {
   const { jointStates, railPos, gripperPos, effectorPose, sendGotoPosition } = useRos();
-
-  const [tab, setTab]     = useState<Tab>("joint");
+  const [tab, setTab] = useState<Tab>("joint");
   const [speed, setSpeed] = useState(30);
 
-  // Refs for always-fresh values in interval callbacks (avoids stale closure)
-  const jointStatesRef  = useRef(jointStates);
-  const railPosRef      = useRef(railPos);
-  const gripperPosRef   = useRef(gripperPos);
-  const effectorPoseRef = useRef(effectorPose);
-  const speedRef        = useRef(speed);
-  const intervalRef     = useRef<ReturnType<typeof setInterval> | null>(null);
+  const jointStatesRef   = useRef(jointStates);
+  const railPosRef       = useRef(railPos);
+  const gripperPosRef    = useRef(gripperPos);
+  const speedRef         = useRef(speed);
+  // Tracks last-commanded effector pose so non-jogged axes don't drift from feedback
+  const localEffectorRef = useRef({ ...effectorPose });
+  const isJoggingRef     = useRef(false);
+  const jogTimeoutRef    = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => { jointStatesRef.current  = jointStates;  }, [jointStates]);
-  useEffect(() => { railPosRef.current      = railPos;      }, [railPos]);
-  useEffect(() => { gripperPosRef.current   = gripperPos;   }, [gripperPos]);
-  useEffect(() => { effectorPoseRef.current = effectorPose; }, [effectorPose]);
-  useEffect(() => { speedRef.current        = speed;        }, [speed]);
+  useEffect(() => { jointStatesRef.current = jointStates; }, [jointStates]);
+  useEffect(() => { railPosRef.current     = railPos;     }, [railPos]);
+  useEffect(() => { gripperPosRef.current  = gripperPos;  }, [gripperPos]);
+  useEffect(() => { speedRef.current       = speed;       }, [speed]);
 
-  // Cleanup on unmount
-  useEffect(() => () => stopJog(), []);
+  // Sync local target with robot feedback only when idle
+  useEffect(() => {
+    if (!isJoggingRef.current) localEffectorRef.current = { ...effectorPose };
+  }, [effectorPose]);
 
-  const stopJog = useCallback(() => {
-    if (intervalRef.current !== null) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
-  }, []);
-
-  // ── Joint jog ──────────────────────────────────────────────────────────
-  const sendJointJog = useCallback((key: JointKey, direction: 1 | -1) => {
+  // ── Absolute-set commands ──────────────────────────────────────────────
+  const sendJointSet = useCallback((key: JointKey, value: number) => {
     const j = jointStatesRef.current;
-    const step = JOINT_AXES.find(a => a.key === key)!.step * direction;
     const base = {
       controlMode: "joint",
       j1: j[0], j2: j[1], j3: j[2], j4: j[3], j5: j[4], j6: j[5],
-      rail: railPosRef.current,
+      rail:    railPosRef.current,
       gripper: gripperPosRef.current,
-      speed: speedRef.current,
+      speed:   speedRef.current,
       sequence: 0, label: "jog",
     };
-
     if (key === "rail") {
-      sendGotoPosition({ ...base, rail: base.rail + step });
+      sendGotoPosition({ ...base, rail: value });
     } else if (key === "gripper") {
-      sendGotoPosition({ ...base, gripper: Math.max(0, Math.min(100, base.gripper + step)) });
+      sendGotoPosition({ ...base, gripper: Math.max(0, Math.min(100, value)) });
     } else {
-      const idx = parseInt(key[1]) - 1;
+      const idx    = parseInt(key[1]) - 1;
       const joints = [j[0], j[1], j[2], j[3], j[4], j[5]];
-      joints[idx] += step;
+      joints[idx]  = value;
       sendGotoPosition({ ...base, j1: joints[0], j2: joints[1], j3: joints[2], j4: joints[3], j5: joints[4], j6: joints[5] });
     }
   }, [sendGotoPosition]);
 
-  // ── Effector jog ───────────────────────────────────────────────────────
-  const sendEffectorJog = useCallback((key: string, direction: 1 | -1) => {
-    const j = jointStatesRef.current;
-    const p = effectorPoseRef.current;
-    const allAxes = [...XYZ_AXES, ...RPY_AXES];
-    const step = allAxes.find(a => a.key === key)!.step * direction;
+  const sendEffectorSet = useCallback((key: string, value: number) => {
+    // Mark jogging; reset to idle after 500 ms of no commands
+    isJoggingRef.current = true;
+    if (jogTimeoutRef.current) clearTimeout(jogTimeoutRef.current);
+    jogTimeoutRef.current = setTimeout(() => { isJoggingRef.current = false; }, 500);
+
+    // Update only the commanded axis in local target — other axes keep last commanded value
+    (localEffectorRef.current as any)[key] = value;
+    const loc = localEffectorRef.current;
+    const j   = jointStatesRef.current;
     sendGotoPosition({
       controlMode: "effector",
       j1: j[0], j2: j[1], j3: j[2], j4: j[3], j5: j[4], j6: j[5],
-      rail: railPosRef.current,
+      rail:    railPosRef.current,
       gripper: gripperPosRef.current,
-      speed: speedRef.current,
+      speed:   speedRef.current,
       sequence: 0, label: "jog",
-      x:     key === "x"     ? p.x     + step : p.x,
-      y:     key === "y"     ? p.y     + step : p.y,
-      z:     key === "z"     ? p.z     + step : p.z,
-      roll:  key === "roll"  ? p.roll  + step : p.roll,
-      pitch: key === "pitch" ? p.pitch + step : p.pitch,
-      yaw:   key === "yaw"   ? p.yaw   + step : p.yaw,
+      x: loc.x, y: loc.y, z: loc.z,
+      roll: loc.roll, pitch: loc.pitch, yaw: loc.yaw,
     });
   }, [sendGotoPosition]);
 
-  // ── Hold-to-move ──────────────────────────────────────────────────────
-  const startJog = useCallback((key: string, direction: 1 | -1, mode: Tab) => {
-    stopJog();
-    const fire = () => mode === "joint"
-      ? sendJointJog(key as JointKey, direction)
-      : sendEffectorJog(key, direction);
-    fire(); // immediate on press
-    intervalRef.current = setInterval(fire, JOG_INTERVAL_MS);
-  }, [stopJog, sendJointJog, sendEffectorJog]);
-
-  // ── Helpers for AxisControl ───────────────────────────────────────────
-  const make = (key: string, mode: Tab) => ({
-    onPlus:  () => startJog(key,  1, mode),
-    onMinus: () => startJog(key, -1, mode),
-    onStop:  stopJog,
-  });
+  const sendHome = useCallback(() => {
+    sendGotoPosition({
+      controlMode: "joint",
+      j1: 0, j2: 0, j3: 0, j4: 0, j5: 0, j6: 0,
+      rail: 0, gripper: 0,
+      speed: speedRef.current,
+      sequence: 0, label: "home",
+    });
+  }, [sendGotoPosition]);
 
   const jointValue = (key: JointKey): number => {
     if (key === "rail")    return railPos;
@@ -193,10 +198,7 @@ export default function JogControlPanel({ onClose }: { onClose: () => void }) {
               <p className="text-xs text-gray-400 dark:text-[#9aa8c8] font-bold mt-0.5">ควบคุมด้วยมือ</p>
             </div>
           </div>
-          <button
-            onClick={() => { stopJog(); onClose(); }}
-            className="w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors"
-          >
+          <button onClick={onClose} className="w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors">
             <X size={18} />
           </button>
         </div>
@@ -206,7 +208,7 @@ export default function JogControlPanel({ onClose }: { onClose: () => void }) {
           {(["joint", "effector"] as Tab[]).map((t) => (
             <button
               key={t}
-              onClick={() => { stopJog(); setTab(t); }}
+              onClick={() => setTab(t)}
               className={`px-6 py-2.5 rounded-full text-sm font-black transition-colors ${
                 tab === t
                   ? t === "joint"
@@ -227,11 +229,10 @@ export default function JogControlPanel({ onClose }: { onClose: () => void }) {
               {JOINT_AXES.map((axis) => (
                 <AxisControl
                   key={axis.key}
-                  label={axis.label}
-                  unit={axis.unit}
-                  color={axis.color}
+                  label={axis.label} unit={axis.unit} color={axis.color}
                   currentValue={jointValue(axis.key)}
-                  {...make(axis.key, "joint")}
+                  min={axis.min} max={axis.max} step={axis.step}
+                  onSet={(v) => sendJointSet(axis.key as JointKey, v)}
                 />
               ))}
             </div>
@@ -242,11 +243,10 @@ export default function JogControlPanel({ onClose }: { onClose: () => void }) {
                 {XYZ_AXES.map((axis) => (
                   <AxisControl
                     key={axis.key}
-                    label={axis.label}
-                    unit={axis.unit}
-                    color={axis.color}
+                    label={axis.label} unit={axis.unit} color={axis.color}
                     currentValue={effectorPose[axis.key as "x" | "y" | "z"]}
-                    {...make(axis.key, "effector")}
+                    min={axis.min} max={axis.max} step={axis.step}
+                    onSet={(v) => sendEffectorSet(axis.key, v)}
                   />
                 ))}
               </div>
@@ -255,11 +255,10 @@ export default function JogControlPanel({ onClose }: { onClose: () => void }) {
                 {RPY_AXES.map((axis) => (
                   <AxisControl
                     key={axis.key}
-                    label={axis.label}
-                    unit={axis.unit}
-                    color={axis.color}
+                    label={axis.label} unit={axis.unit} color={axis.color}
                     currentValue={effectorPose[axis.key as "roll" | "pitch" | "yaw"]}
-                    {...make(axis.key, "effector")}
+                    min={axis.min} max={axis.max} step={axis.step}
+                    onSet={(v) => sendEffectorSet(axis.key, v)}
                   />
                 ))}
               </div>
@@ -267,8 +266,8 @@ export default function JogControlPanel({ onClose }: { onClose: () => void }) {
           )}
         </div>
 
-        {/* Speed slider */}
-        <div className="px-8 pt-4 pb-7 border-t border-black/5 dark:border-white/7">
+        {/* Footer: Speed + Home */}
+        <div className="px-8 pt-4 pb-7 border-t border-black/5 dark:border-white/7 space-y-3">
           <div className="flex items-center gap-4">
             <span className="text-xs font-black text-gray-400 dark:text-[#9aa8c8] uppercase w-14 shrink-0">Speed</span>
             <input
@@ -278,6 +277,13 @@ export default function JogControlPanel({ onClose }: { onClose: () => void }) {
             />
             <span className="text-sm font-black text-blue-600 w-12 text-right tabular-nums">{speed}%</span>
           </div>
+          <button
+            onClick={sendHome}
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-gray-100 dark:bg-[#1a2540] hover:bg-gray-200 dark:hover:bg-[#243050] active:bg-gray-300 dark:active:bg-[#2d3e60] transition-colors font-black text-sm text-gray-700 dark:text-[#b0c4e0]"
+          >
+            <Home size={16} />
+            Home
+          </button>
         </div>
 
       </div>
