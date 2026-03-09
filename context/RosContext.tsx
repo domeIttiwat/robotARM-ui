@@ -40,6 +40,7 @@ interface RosContextType {
   effectorPose: EffectorPose;
   sendJob: (jobData: any) => void;
   sendGotoPosition: (taskData: any) => void;
+  sendJogCommand: (cmd: any) => void;
   setTeachMode: (status: boolean) => void;
   isExecuting: boolean;
   isPaused: boolean;
@@ -292,6 +293,19 @@ export const RosProvider = ({ children }: { children: React.ReactNode }) => {
     [ros, applyInverse]
   );
 
+  const sendJogCommand = useCallback(
+    (cmd: any) => {
+      if (!ros) return;
+      const topic = new ROSLIB.Topic({
+        ros,
+        name: "/goto_position",
+        messageType: "std_msgs/String",
+      });
+      topic.publish({ data: JSON.stringify(cmd) });
+    },
+    [ros]
+  );
+
   const setTeachMode = useCallback(
     (status: boolean) => {
       if (!ros) return;
@@ -368,6 +382,7 @@ export const RosProvider = ({ children }: { children: React.ReactNode }) => {
         effectorPose,
         sendJob,
         sendGotoPosition,
+        sendJogCommand,
         setTeachMode,
         isExecuting,
         isPaused,

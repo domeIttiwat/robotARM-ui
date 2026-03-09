@@ -1,74 +1,56 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
-import { X, Gamepad2, Home } from "lucide-react";
+import { X, Gamepad2, Home, Terminal } from "lucide-react";
 import { useRos } from "@/context/RosContext";
 
 type Tab = "joint" | "effector";
 const JOG_INTERVAL_MS = 100;
 
 const JOINT_AXES = [
-  { key: "j1",      label: "J1",      unit: "°",  step: 1,  min: -180, max: 180,  color: "bg-gray-100 text-gray-700",     maxRate: 90  },
-  { key: "j2",      label: "J2",      unit: "°",  step: 1,  min: -180, max: 180,  color: "bg-gray-100 text-gray-700",     maxRate: 90  },
-  { key: "j3",      label: "J3",      unit: "°",  step: 1,  min: -180, max: 180,  color: "bg-gray-100 text-gray-700",     maxRate: 90  },
-  { key: "j4",      label: "J4",      unit: "°",  step: 1,  min: -180, max: 180,  color: "bg-gray-100 text-gray-700",     maxRate: 90  },
-  { key: "j5",      label: "J5",      unit: "°",  step: 1,  min: -180, max: 180,  color: "bg-gray-100 text-gray-700",     maxRate: 90  },
-  { key: "j6",      label: "J6",      unit: "°",  step: 1,  min: -180, max: 180,  color: "bg-gray-100 text-gray-700",     maxRate: 90  },
-  { key: "rail",    label: "Rail",    unit: "mm", step: 5,  min: 0,    max: 1000, color: "bg-blue-100 text-blue-700",     maxRate: 300 },
-  { key: "gripper", label: "Gripper", unit: "%",  step: 5,  min: 0,    max: 100,  color: "bg-orange-100 text-orange-700", maxRate: 100 },
+  { key: "j1",      label: "J1",      unit: "°",  color: "bg-gray-100 text-gray-700"     },
+  { key: "j2",      label: "J2",      unit: "°",  color: "bg-gray-100 text-gray-700"     },
+  { key: "j3",      label: "J3",      unit: "°",  color: "bg-gray-100 text-gray-700"     },
+  { key: "j4",      label: "J4",      unit: "°",  color: "bg-gray-100 text-gray-700"     },
+  { key: "j5",      label: "J5",      unit: "°",  color: "bg-gray-100 text-gray-700"     },
+  { key: "j6",      label: "J6",      unit: "°",  color: "bg-gray-100 text-gray-700"     },
+  { key: "rail",    label: "Rail",    unit: "mm", color: "bg-blue-100 text-blue-700"     },
+  { key: "gripper", label: "Gripper", unit: "%",  color: "bg-orange-100 text-orange-700" },
 ] as const;
 
 type JointKey = typeof JOINT_AXES[number]["key"];
 
 const XYZ_AXES = [
-  { key: "x", label: "Tip X", unit: "mm", step: 5, min: -700, max: 700, color: "bg-red-100 text-red-700",    maxRate: 300 },
-  { key: "y", label: "Tip Y", unit: "mm", step: 5, min: -700, max: 700, color: "bg-green-100 text-green-700", maxRate: 300 },
-  { key: "z", label: "Tip Z", unit: "mm", step: 5, min: 0,    max: 800, color: "bg-blue-100 text-blue-700",  maxRate: 300 },
+  { key: "x", label: "Tip X", unit: "mm", color: "bg-red-100 text-red-700"    },
+  { key: "y", label: "Tip Y", unit: "mm", color: "bg-green-100 text-green-700" },
+  { key: "z", label: "Tip Z", unit: "mm", color: "bg-blue-100 text-blue-700"  },
 ] as const;
 
 const RPY_AXES = [
-  { key: "roll",  label: "Tip Rx", unit: "°", step: 1, min: -180, max: 180, color: "bg-purple-100 text-purple-700", maxRate: 90 },
-  { key: "pitch", label: "Tip Ry", unit: "°", step: 1, min: -180, max: 180, color: "bg-purple-100 text-purple-700", maxRate: 90 },
-  { key: "yaw",   label: "Tip Rz", unit: "°", step: 1, min: -180, max: 180, color: "bg-purple-100 text-purple-700", maxRate: 90 },
+  { key: "roll",  label: "Tip Rx", unit: "°", color: "bg-purple-100 text-purple-700" },
+  { key: "pitch", label: "Tip Ry", unit: "°", color: "bg-purple-100 text-purple-700" },
+  { key: "yaw",   label: "Tip Rz", unit: "°", color: "bg-purple-100 text-purple-700" },
 ] as const;
 
 // ── AxisControl ────────────────────────────────────────────────────────────────
-// ± buttons only — accumulate target in local ref (not robot feedback).
 interface AxisControlProps {
   label: string; unit: string; color: string;
-  currentValue: number; min: number; max: number; step: number;
-  maxRate: number;
-  speedRef: React.MutableRefObject<number>;
-  onSet: (value: number) => void;
+  currentValue: number;
+  onJog: (direction: 1 | -1) => void;
 }
 
-function AxisControl({ label, unit, color, currentValue, min, max, step, maxRate, speedRef, onSet }: AxisControlProps) {
-  const targetRef   = useRef(currentValue);
-  const isHolding   = useRef(false);
+function AxisControl({ label, unit, color, currentValue, onJog }: AxisControlProps) {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const onSetRef    = useRef(onSet);
-  useEffect(() => { onSetRef.current = onSet; }, [onSet]);
-
-  // Sync local target with robot only when idle
-  useEffect(() => {
-    if (!isHolding.current) targetRef.current = Math.max(min, Math.min(max, currentValue));
-  }, [currentValue, min, max]);
-
+  const onJogRef    = useRef(onJog);
+  useEffect(() => { onJogRef.current = onJog; }, [onJog]);
   useEffect(() => () => stopHold(), []);
 
   const stopHold = () => {
     if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
-    isHolding.current = false;
   };
 
   const startHold = (direction: 1 | -1) => {
-    isHolding.current = true;
-    const fire = () => {
-      const dynStep = Math.max(step, (speedRef.current / 100) * maxRate * (JOG_INTERVAL_MS / 1000));
-      const next = Math.max(min, Math.min(max, targetRef.current + dynStep * direction));
-      targetRef.current = next;
-      onSetRef.current(next);
-    };
+    const fire = () => onJogRef.current(direction);
     fire();
     intervalRef.current = setInterval(fire, JOG_INTERVAL_MS);
   };
@@ -100,85 +82,72 @@ function AxisControl({ label, unit, color, currentValue, min, max, step, maxRate
   );
 }
 
+// ── Log entry type ─────────────────────────────────────────────────────────────
+interface JogLogEntry {
+  ts: string;
+  cmd: Record<string, unknown>;
+}
+
 // ── Main Component ─────────────────────────────────────────────────────────────
 export default function JogControlPanel({ onClose }: { onClose: () => void }) {
-  const { jointStates, railPos, gripperPos, effectorPose, sendGotoPosition } = useRos();
-  const [tab, setTab] = useState<Tab>("joint");
-  const [speed, setSpeed] = useState(30);
+  const { jointStates, railPos, gripperPos, effectorPose, sendGotoPosition, sendJogCommand, calibration } = useRos();
+  const [tab, setTab]       = useState<Tab>("joint");
+  const [speed, setSpeed]   = useState(30);
+  const [jogLog, setJogLog] = useState<JogLogEntry[]>([]);
 
-  const jointStatesRef   = useRef(jointStates);
-  const railPosRef       = useRef(railPos);
-  const gripperPosRef    = useRef(gripperPos);
-  const speedRef         = useRef(speed);
-  // Tracks last-commanded effector pose so non-jogged axes don't drift from feedback
-  const localEffectorRef = useRef({ ...effectorPose });
-  const isJoggingRef     = useRef(false);
-  const jogTimeoutRef    = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const speedRef = useRef(speed);
+  useEffect(() => { speedRef.current = speed; }, [speed]);
 
-  useEffect(() => { jointStatesRef.current = jointStates; }, [jointStates]);
-  useEffect(() => { railPosRef.current     = railPos;     }, [railPos]);
-  useEffect(() => { gripperPosRef.current  = gripperPos;  }, [gripperPos]);
-  useEffect(() => { speedRef.current       = speed;       }, [speed]);
+  const pushLog = useCallback((cmd: Record<string, unknown>) => {
+    const now = new Date();
+    const ts  = now.toLocaleTimeString("en-US", {
+      hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit",
+    }) + "." + String(now.getMilliseconds()).padStart(3, "0").slice(0, 1);
+    setJogLog((prev) => [{ ts, cmd }, ...prev].slice(0, 12));
+  }, []);
 
-  // Sync local target with robot feedback only when idle
-  useEffect(() => {
-    if (!isJoggingRef.current) localEffectorRef.current = { ...effectorPose };
-  }, [effectorPose]);
-
-  // ── Absolute-set commands ──────────────────────────────────────────────
-  const sendJointSet = useCallback((key: JointKey, value: number) => {
-    const j = jointStatesRef.current;
-    const base = {
+  // Joint-mode jog: send only axis + direction + speed
+  const sendJogAxis = useCallback((key: JointKey, direction: 1 | -1) => {
+    const cmd = {
+      label:       "jog",
       controlMode: "joint",
-      j1: j[0], j2: j[1], j3: j[2], j4: j[3], j5: j[4], j6: j[5],
-      rail:    railPosRef.current,
-      gripper: gripperPosRef.current,
-      speed:   speedRef.current,
-      sequence: 0, label: "jog",
+      axis:        key,
+      direction,
+      speed:       speedRef.current,
     };
-    if (key === "rail") {
-      sendGotoPosition({ ...base, rail: value });
-    } else if (key === "gripper") {
-      sendGotoPosition({ ...base, gripper: Math.max(0, Math.min(100, value)) });
-    } else {
-      const idx    = parseInt(key[1]) - 1;
-      const joints = [j[0], j[1], j[2], j[3], j[4], j[5]];
-      joints[idx]  = value;
-      sendGotoPosition({ ...base, j1: joints[0], j2: joints[1], j3: joints[2], j4: joints[3], j5: joints[4], j6: joints[5] });
-    }
-  }, [sendGotoPosition]);
+    sendJogCommand(cmd);
+    pushLog(cmd);
+  }, [sendJogCommand, pushLog]);
 
-  const sendEffectorSet = useCallback((key: string, value: number) => {
-    // Mark jogging; reset to idle after 500 ms of no commands
-    isJoggingRef.current = true;
-    if (jogTimeoutRef.current) clearTimeout(jogTimeoutRef.current);
-    jogTimeoutRef.current = setTimeout(() => { isJoggingRef.current = false; }, 500);
-
-    // Update only the commanded axis in local target — other axes keep last commanded value
-    (localEffectorRef.current as any)[key] = value;
-    const loc = localEffectorRef.current;
-    const j   = jointStatesRef.current;
-    sendGotoPosition({
+  // Effector-mode jog: send axis + direction + speed + TCP offset for IK
+  const sendJogEffector = useCallback((axis: string, direction: 1 | -1) => {
+    const { tcpOffset } = calibration;
+    const cmd = {
+      label:       "jog",
       controlMode: "effector",
-      j1: j[0], j2: j[1], j3: j[2], j4: j[3], j5: j[4], j6: j[5],
-      rail:    railPosRef.current,
-      gripper: gripperPosRef.current,
-      speed:   speedRef.current,
-      sequence: 0, label: "jog",
-      x: loc.x, y: loc.y, z: loc.z,
-      roll: loc.roll, pitch: loc.pitch, yaw: loc.yaw,
-    });
-  }, [sendGotoPosition]);
+      axis,
+      direction,
+      speed:       speedRef.current,
+      tcp_x:       tcpOffset.x,
+      tcp_y:       tcpOffset.y,
+      tcp_z:       tcpOffset.z,
+    };
+    sendJogCommand(cmd);
+    pushLog(cmd);
+  }, [sendJogCommand, pushLog, calibration]);
 
+  // Home: use sendGotoPosition so calibration inverse transforms are applied
   const sendHome = useCallback(() => {
-    sendGotoPosition({
+    const cmd = {
       controlMode: "joint",
       j1: 0, j2: 0, j3: 0, j4: 0, j5: 0, j6: 0,
       rail: 0, gripper: 0,
       speed: speedRef.current,
       sequence: 0, label: "home",
-    });
-  }, [sendGotoPosition]);
+    };
+    sendGotoPosition(cmd);
+    pushLog({ label: "home", speed: speedRef.current });
+  }, [sendGotoPosition, pushLog]);
 
   const jointValue = (key: JointKey): number => {
     if (key === "rail")    return railPos;
@@ -233,10 +202,8 @@ export default function JogControlPanel({ onClose }: { onClose: () => void }) {
                 <AxisControl
                   key={axis.key}
                   label={axis.label} unit={axis.unit} color={axis.color}
-                  currentValue={jointValue(axis.key)}
-                  min={axis.min} max={axis.max} step={axis.step}
-                  maxRate={axis.maxRate} speedRef={speedRef}
-                  onSet={(v) => sendJointSet(axis.key as JointKey, v)}
+                  currentValue={jointValue(axis.key as JointKey)}
+                  onJog={(dir) => sendJogAxis(axis.key as JointKey, dir)}
                 />
               ))}
             </div>
@@ -249,9 +216,7 @@ export default function JogControlPanel({ onClose }: { onClose: () => void }) {
                     key={axis.key}
                     label={axis.label} unit={axis.unit} color={axis.color}
                     currentValue={effectorPose[axis.key as "x" | "y" | "z"]}
-                    min={axis.min} max={axis.max} step={axis.step}
-                    maxRate={axis.maxRate} speedRef={speedRef}
-                    onSet={(v) => sendEffectorSet(axis.key, v)}
+                    onJog={(dir) => sendJogEffector(axis.key, dir)}
                   />
                 ))}
               </div>
@@ -262,14 +227,53 @@ export default function JogControlPanel({ onClose }: { onClose: () => void }) {
                     key={axis.key}
                     label={axis.label} unit={axis.unit} color={axis.color}
                     currentValue={effectorPose[axis.key as "roll" | "pitch" | "yaw"]}
-                    min={axis.min} max={axis.max} step={axis.step}
-                    maxRate={axis.maxRate} speedRef={speedRef}
-                    onSet={(v) => sendEffectorSet(axis.key, v)}
+                    onJog={(dir) => sendJogEffector(axis.key, dir)}
                   />
                 ))}
               </div>
             </div>
           )}
+        </div>
+
+        {/* Command Log */}
+        <div className="mx-8 mb-3 rounded-2xl bg-gray-950 dark:bg-black/60 overflow-hidden border border-white/5">
+          <div className="flex items-center gap-2 px-3 py-2 border-b border-white/5">
+            <Terminal size={11} className="text-green-400" />
+            <span className="text-[10px] font-black text-gray-500 uppercase tracking-wider">Command Log</span>
+            {jogLog.length === 0 && (
+              <span className="text-[10px] text-gray-600 ml-1">— กดปุ่มเพื่อดู</span>
+            )}
+          </div>
+          <div className="h-20 overflow-y-auto px-3 py-2 space-y-0.5 font-mono text-[10px]">
+            {jogLog.length === 0 ? (
+              <p className="text-gray-700 italic">ยังไม่มีคำสั่ง</p>
+            ) : (
+              jogLog.map((entry, i) => (
+                <div key={i} className="flex items-baseline gap-2 leading-relaxed">
+                  <span className="text-gray-600 shrink-0 w-16">{entry.ts}</span>
+                  {entry.cmd.label === "home" ? (
+                    <span className="text-yellow-400">HOME  spd:{entry.cmd.speed as number}%</span>
+                  ) : (
+                    <>
+                      <span className={`shrink-0 w-14 ${entry.cmd.controlMode === "effector" ? "text-purple-400" : "text-cyan-400"}`}>
+                        [{entry.cmd.controlMode as string}]
+                      </span>
+                      <span className="text-yellow-300 shrink-0 w-10">{String(entry.cmd.axis)}</span>
+                      <span className={(entry.cmd.direction as number) > 0 ? "text-green-400 shrink-0" : "text-red-400 shrink-0"}>
+                        {(entry.cmd.direction as number) > 0 ? "  +" : "  −"}
+                      </span>
+                      <span className="text-gray-500 shrink-0">spd:{entry.cmd.speed as number}%</span>
+                      {entry.cmd.tcp_x != null && (
+                        <span className="text-purple-500">
+                          tcp:({entry.cmd.tcp_x as number},{entry.cmd.tcp_y as number},{entry.cmd.tcp_z as number})mm
+                        </span>
+                      )}
+                    </>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
         </div>
 
         {/* Footer: Speed + Home */}

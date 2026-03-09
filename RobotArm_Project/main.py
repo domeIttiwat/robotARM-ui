@@ -94,8 +94,9 @@ traj = {
 
 jog = {
     'active': False,
-    'target': None,   # latest task dict (label="jog")
-    'last_t': 0.0,
+    'target': None,   # latest jog command dict {axis, direction, speed, controlMode, ...}
+    'last_t': 0.0,    # wall-clock time of last step_jog call (for dt computation)
+    'cmd_t':  0.0,    # wall-clock time of last received jog command (for timeout)
 }
 
 WS_URL                = "ws://localhost:9090"
@@ -474,13 +475,22 @@ def _load_next_task():
 
 
 def step_jog():
-    """50Hz: moves robot toward latest jog target (latest-wins continuous tracking)."""
+    """50Hz: direction-based continuous jog. Stops automatically 300 ms after last command."""
     if not jog['active'] or jog['target'] is None:
         return
     if traj['running']:
         return   # trajectory takes priority
 
+    # Auto-stop when UI stops sending commands (button released)
+    if time.time() - jog['cmd_t'] > 0.3:
+        jog['active'] = False
+        jog['target'] = None
+        bridge.publish("/machine_state", {"data": 0})
+        return
+
     target    = jog['target']
+    axis      = target.get('axis', '')
+    direction = float(target.get('direction', 0))
     speed_pct = float(target.get('speed', 30))
     mode      = target.get('controlMode', 'joint')
 
@@ -488,54 +498,56 @@ def step_jog():
     dt  = min(now - jog['last_t'], 0.1)
     jog['last_t'] = now
 
-    if mode == 'effector' and target.get('x') is not None:
-        T_tgt = (
-            SE3(target['x'] / 1000, target['y'] / 1000, target['z'] / 1000)
-            * SE3.RPY(np.deg2rad([target.get('roll', 0), target.get('pitch', 0), target.get('yaw', 0)]))
-            * tip_offset['se3'].inv()
-        )
-        q_sol, ok, *_ = robot.ik_LM(T_tgt, q0=robot.q, ilimit=300)
-        if not ok:
-            return
-        q_end = q_sol
-    else:
-        q_end = np.deg2rad([float(target.get(f'j{i+1}', np.rad2deg(robot.q[i]))) for i in range(6)])
+    if mode == 'joint':
+        if axis in ('j1', 'j2', 'j3', 'j4', 'j5', 'j6'):
+            idx      = int(axis[1]) - 1
+            max_dps  = (speed_pct / 100.0) * MAX_SPEED_DEG_PER_SEC
+            step_rad = np.deg2rad(max_dps * dt) * direction
+            q_new    = robot.q.copy()
+            q_new[idx] = np.clip(q_new[idx] + step_rad, -np.pi, np.pi)
+            robot.q = q_new
+        elif axis == 'rail':
+            step = (speed_pct / 100.0) * MAX_CART_SPEED_MM_PER_SEC * dt * direction
+            sim_rail['v'] = max(0.0, min(1000.0, sim_rail['v'] + step))
+        elif axis == 'gripper':
+            step = speed_pct * dt * direction   # 100 % speed = 100 %/sec
+            sim_gripper['v'] = max(0.0, min(100.0, sim_gripper['v'] + step))
 
-    rail_end = float(target.get('rail',    sim_rail['v']))
-    grip_end = float(target.get('gripper', sim_gripper['v']))
+    elif mode == 'effector':
+        tcp_x = float(target.get('tcp_x', 0)) / 1000.0   # mm → m
+        tcp_y = float(target.get('tcp_y', 0)) / 1000.0
+        tcp_z = float(target.get('tcp_z', 0)) / 1000.0
+        T_offset = SE3(tcp_x, tcp_y, tcp_z)
 
-    max_dps      = (speed_pct / 100.0) * MAX_SPEED_DEG_PER_SEC
-    max_step_rad = np.deg2rad(max_dps * dt)
-    rail_step    = (speed_pct / 100.0) * MAX_CART_SPEED_MM_PER_SEC * dt
+        T_ee  = robot.fkine(robot.q)
+        T_tip = T_ee * T_offset
+        pos   = list(T_tip.t)           # [x, y, z] metres
+        rpy   = list(T_tip.rpy())       # [roll, pitch, yaw] radians
 
-    q_new   = robot.q.copy()
-    reached = True
-    for i in range(6):
-        delta = q_end[i] - robot.q[i]
-        if abs(delta) > max_step_rad:
-            q_new[i] = robot.q[i] + np.sign(delta) * max_step_rad
-            reached = False
+        max_mps = (speed_pct / 100.0) * MAX_CART_SPEED_MM_PER_SEC / 1000.0   # m/sec
+        max_rps = np.deg2rad((speed_pct / 100.0) * MAX_SPEED_DEG_PER_SEC)     # rad/sec
+
+        if   axis == 'x':     pos[0] += max_mps * dt * direction
+        elif axis == 'y':     pos[1] += max_mps * dt * direction
+        elif axis == 'z':     pos[2] += max_mps * dt * direction
+        elif axis == 'roll':  rpy[0] += max_rps * dt * direction
+        elif axis == 'pitch': rpy[1] += max_rps * dt * direction
+        elif axis == 'yaw':   rpy[2] += max_rps * dt * direction
         else:
-            q_new[i] = q_end[i]
-    robot.q = q_new
+            return
 
-    rail_d = rail_end - sim_rail['v']
-    if abs(rail_d) > rail_step:
-        sim_rail['v'] += np.sign(rail_d) * rail_step
-        reached = False
-    else:
-        sim_rail['v'] = rail_end
+        T_tgt_tip = SE3(pos) * SE3.RPY(rpy)
+        T_tgt_ee  = T_tgt_tip * T_offset.inv()
 
-    sim_gripper['v'] = grip_end
+        q_sol, ok, *_ = robot.ik_LM(T_tgt_ee, q0=robot.q, ilimit=300)
+        if not ok:
+            return   # singularity — skip silently
+        robot.q = q_sol
 
     q_deg = np.rad2deg(robot.q)
     for i, s in enumerate(joint_sliders):
         s.value = float(np.clip(q_deg[i], s.min, s.max))
     update_ik_sliders_from_fk()
-
-    if reached:
-        bridge.publish("/machine_state", {"data": 2})
-        jog['target'] = None
 
 
 def step_trajectory():
@@ -659,9 +671,12 @@ def handle_execute_trajectory(tasks: list):
 def handle_goto_position(task: dict):
     """Move to a single position (DryRun / Test / Jog)."""
     if task.get("label") == "jog":
+        now = time.time()
         jog['active'] = True
         jog['target'] = task
-        jog['last_t'] = time.time()
+        jog['cmd_t']  = now
+        if jog['last_t'] == 0.0:
+            jog['last_t'] = now
         return
     # Non-jog: stop jog, run as single trajectory task
     jog['active'] = False

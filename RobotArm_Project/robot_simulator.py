@@ -127,10 +127,11 @@ class RobotSimulator:
         # Move completion event (set by move_loop when it finishes naturally)
         self._move_done_event = threading.Event()
 
-        # Jog latest-wins state
-        self._jog_target = None   # (q_end, rail, grip, speed_pct) — updated atomically
-        self._jog_active = False
-        self._jog_lock   = threading.Lock()
+        # Jog direction-based state
+        self._jog_target  = None    # latest command dict {axis, direction, speed_pct, mode, ...}
+        self._jog_cmd_t   = 0.0     # wall time of last received jog command
+        self._jog_active  = False
+        self._jog_lock    = threading.Lock()
 
         # Trajectory state
         self._traj_tasks  = []
@@ -307,23 +308,9 @@ class RobotSimulator:
         is_jog = task.get("label") == "jog"
 
         if is_jog:
-            speed_pct = float(task.get("speed", 30))
-            mode = task.get("controlMode", "joint")
-            if mode == "effector":
-                q_target = self.simple_ik(
-                    float(task.get("x", 0)), float(task.get("y", 0)), float(task.get("z", 0)),
-                    float(task.get("roll", 0)), float(task.get("pitch", 0)), float(task.get("yaw", 0)),
-                )
-                if q_target is None:
-                    return   # singularity — skip silently during jog
-            else:
-                q_target = [float(task.get(f"j{i+1}", self.joints[i])) for i in range(6)]
-
-            rail_target    = float(task.get("rail",    self.rail))
-            gripper_target = float(task.get("gripper", self.gripper))
-
             with self._jog_lock:
-                self._jog_target = (q_target, rail_target, gripper_target, speed_pct)
+                self._jog_target = task
+                self._jog_cmd_t  = time.time()
 
             if not self._jog_active:
                 self._jog_active   = True
@@ -448,6 +435,7 @@ class RobotSimulator:
             with self._jog_lock:
                 self._jog_active = False
                 self._jog_target = None
+                self._jog_cmd_t  = 0.0
             self._stop_flag.set()
             self._pause_event.set()     # unblock so move thread can exit
             print("[CTRL] Stopped")
@@ -621,55 +609,83 @@ class RobotSimulator:
         self._move_thread.start()
 
     def _jog_loop(self):
-        """50 Hz: tracks latest _jog_target without thread restart."""
+        """50 Hz: direction-based continuous jog. Stops 300 ms after last command."""
+        MAX_DPS      = 90.0    # deg/sec at 100 % speed
+        MAX_MMS      = 300.0   # mm/sec  at 100 % speed (Cartesian)
+        TIMEOUT      = 0.3     # seconds of silence before auto-stop
+
         last_t = time.time()
         while True:
             with self._jog_lock:
-                target = self._jog_target
-                active = self._jog_active
+                target   = self._jog_target
+                cmd_t    = self._jog_cmd_t
+                active   = self._jog_active
             if not active:
                 break
 
             now = time.time()
-            dt  = min(now - last_t, 0.1)
+
+            # Auto-stop when button is released (no command for TIMEOUT seconds)
+            if now - cmd_t > TIMEOUT:
+                with self._jog_lock:
+                    self._jog_active = False
+                    self._jog_target = None
+                break
+
+            dt     = min(now - last_t, 0.1)
             last_t = now
 
             if target is not None:
-                q_end, rail_end, grip_end, speed_pct = target
-                max_dps  = (speed_pct / 100.0) * 90.0
-                max_step = max_dps * dt
+                axis      = target.get("axis", "")
+                direction = float(target.get("direction", 0))
+                speed_pct = float(target.get("speed", 30))
+                mode      = target.get("controlMode", "joint")
 
-                reached = True
-                for i in range(6):
-                    delta = q_end[i] - self.joints[i]
-                    if abs(delta) > max_step:
-                        self.joints[i] += math.copysign(max_step, delta)
-                        reached = False
+                if mode == "joint":
+                    if axis in ("j1", "j2", "j3", "j4", "j5", "j6"):
+                        idx  = int(axis[1]) - 1
+                        step = (speed_pct / 100.0) * MAX_DPS * dt * direction
+                        self.joints[idx] = max(-180.0, min(180.0, self.joints[idx] + step))
+                    elif axis == "rail":
+                        step = (speed_pct / 100.0) * MAX_MMS * dt * direction
+                        self.rail = max(0.0, min(1000.0, self.rail + step))
+                    elif axis == "gripper":
+                        step = speed_pct * dt * direction   # 100 % speed = 100 %/sec
+                        self.gripper = max(0.0, min(100.0, self.gripper + step))
+
+                elif mode == "effector":
+                    tcp_x = float(target.get("tcp_x", 0))
+                    tcp_y = float(target.get("tcp_y", 0))
+                    tcp_z = float(target.get("tcp_z", 0))
+
+                    # Get current tip position (with TCP offset)
+                    x, y, z, roll, pitch, yaw = self.compute_fk(self.joints)
+
+                    step_mm  = (speed_pct / 100.0) * MAX_MMS  * dt * direction
+                    step_deg = (speed_pct / 100.0) * MAX_DPS  * dt * direction
+
+                    if   axis == "x":     x     += step_mm
+                    elif axis == "y":     y     += step_mm
+                    elif axis == "z":     z     += step_mm
+                    elif axis == "roll":  roll  += step_deg
+                    elif axis == "pitch": pitch += step_deg
+                    elif axis == "yaw":   yaw   += step_deg
                     else:
-                        self.joints[i] = q_end[i]
+                        time.sleep(0.02)
+                        continue
 
-                rail_step = (speed_pct / 100.0) * 300.0 * dt
-                rail_d = rail_end - self.rail
-                if abs(rail_d) > rail_step:
-                    self.rail += math.copysign(rail_step, rail_d)
-                    reached = False
-                else:
-                    self.rail = rail_end
-
-                self.gripper = grip_end
+                    q_new = self.simple_ik(x, y, z, roll, pitch, yaw)
+                    if q_new is None:
+                        time.sleep(0.02)
+                        continue   # singularity — skip silently
+                    self.joints = list(q_new)
 
                 self.publish_joint_states()
                 self.publish_effector_pose()
 
-                if reached:
-                    self.publish_machine_state(MACHINE_REACHED)
-                    time.sleep(0.05)
-                    self.publish_machine_state(MACHINE_IDLE)
-                    with self._jog_lock:
-                        self._jog_target = None
-
             time.sleep(0.02)   # 50 Hz
 
+        self.publish_machine_state(MACHINE_IDLE)
         self._motion_state = 'idle'
         self.publish_robot_status(STATUS_IDLE)
 
