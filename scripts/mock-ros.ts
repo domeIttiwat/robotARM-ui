@@ -36,6 +36,9 @@ let robotStatusTimer: NodeJS.Timeout | null = null;
 
 // Mock joint positions — updated by Jog/goto commands when no real sim
 let mockJointPositions = [0, 0, 0, 0, 0, 0, 0, 0]; // j1-j6 (deg), rail (mm), gripper (%)
+
+// Latest safety status — updated by Python detector publishing /safety_status
+let mockSafetyStatus = 0;
 let jogInactivityTimer: NodeJS.Timeout | null = null;
 
 // ─── Shared helpers ───────────────────────────────────────────────────────────
@@ -208,7 +211,7 @@ wss.on("connection", (ws: WebSocket) => {
         setTimeout(() => publishTopic("/robot_status", 0), 100);
       }
       if (topic === "/safety_status") {
-        setTimeout(() => publishTopic("/safety_status", 0), 100);
+        setTimeout(() => publishTopic("/safety_status", mockSafetyStatus), 100);
       }
     } else if (op === "publish") {
       const subs = subscribers.get(topic);
@@ -223,6 +226,12 @@ wss.on("connection", (ws: WebSocket) => {
           stopAutoPublish();
           console.log(`[SIM] Real joint publisher detected (Client #${clientIds.get(ws)})`);
         }
+      }
+
+      // Track latest safety status so new subscribers get the current value
+      if (topic === "/safety_status" && msg.msg?.data !== undefined) {
+        mockSafetyStatus = Number(msg.msg.data);
+        console.log(`[SAFETY] Status → ${mockSafetyStatus}`);
       }
 
       // Handle goto_position: move joints immediately when no real sim connected

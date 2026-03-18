@@ -89,7 +89,7 @@ interface JogLogEntry {
 }
 
 // ── Main Component ─────────────────────────────────────────────────────────────
-export default function JogControlPanel({ onClose }: { onClose: () => void }) {
+export default function JogControlPanel({ onClose, mode = "modal" }: { onClose: () => void; mode?: "modal" | "panel" }) {
   const { jointStates, railPos, gripperPos, effectorPose, sendGotoPosition, sendJogCommand, calibration } = useRos();
   const [tab, setTab]       = useState<Tab>("joint");
   const [speed, setSpeed]   = useState(30);
@@ -155,148 +155,158 @@ export default function JogControlPanel({ onClose }: { onClose: () => void }) {
     return jointStates[parseInt(key[1]) - 1] ?? 0;
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="tesla-card w-full max-w-2xl flex flex-col max-h-[92vh] overflow-hidden">
+  const panelContent = (
+    <div className={
+      mode === "panel"
+        ? "flex flex-col h-full bg-white dark:bg-[#0a1428] overflow-hidden"
+        : "tesla-card w-full max-w-2xl flex flex-col max-h-[92vh] overflow-hidden"
+    }>
 
-        {/* Header */}
-        <div className="flex items-center justify-between px-8 pt-7 pb-5 border-b border-black/5 dark:border-white/7">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-[16px] bg-gray-100 dark:bg-[#1a2540] flex items-center justify-center">
-              <Gamepad2 size={20} className="text-gray-600 dark:text-[#90a8c8]" />
-            </div>
-            <div>
-              <h2 className="text-2xl font-black leading-tight">Jog</h2>
-              <p className="text-xs text-gray-400 dark:text-[#9aa8c8] font-bold mt-0.5">ควบคุมด้วยมือ</p>
-            </div>
+      {/* Header */}
+      <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-black/5 dark:border-white/7 shrink-0">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-[14px] bg-gray-100 dark:bg-[#1a2540] flex items-center justify-center">
+            <Gamepad2 size={18} className="text-gray-600 dark:text-[#90a8c8]" />
           </div>
-          <button onClick={onClose} className="w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors">
-            <X size={18} />
+          <div>
+            <h2 className="text-xl font-black leading-tight">Jog</h2>
+            <p className="text-xs text-gray-400 dark:text-[#9aa8c8] font-bold mt-0.5">ควบคุมด้วยมือ</p>
+          </div>
+        </div>
+        <button onClick={onClose} className="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors">
+          <X size={16} />
+        </button>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-2 px-6 pt-4 pb-3 shrink-0">
+        {(["joint", "effector"] as Tab[]).map((t) => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            className={`flex-1 py-2 rounded-full text-xs font-black transition-colors ${
+              tab === t
+                ? t === "joint"
+                  ? "bg-gray-900 dark:bg-[#e2eaff] text-white dark:text-[#070d1b]"
+                  : "bg-purple-600 dark:bg-purple-500 text-white"
+                : "bg-gray-100 dark:bg-[#1a2540] text-gray-500 dark:text-[#8090b8] hover:bg-gray-200 dark:hover:bg-[#243050]"
+            }`}
+          >
+            {t === "joint" ? "Joint" : "Effector"}
           </button>
-        </div>
+        ))}
+      </div>
 
-        {/* Tabs */}
-        <div className="flex gap-2 px-8 pt-5 pb-3">
-          {(["joint", "effector"] as Tab[]).map((t) => (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
-              className={`px-6 py-2.5 rounded-full text-sm font-black transition-colors ${
-                tab === t
-                  ? t === "joint"
-                    ? "bg-gray-900 dark:bg-[#e2eaff] text-white dark:text-[#070d1b]"
-                    : "bg-purple-600 dark:bg-purple-500 text-white"
-                  : "bg-gray-100 dark:bg-[#1a2540] text-gray-500 dark:text-[#8090b8] hover:bg-gray-200 dark:hover:bg-[#243050]"
-              }`}
-            >
-              {t === "joint" ? "Joint Mode" : "Effector Mode"}
-            </button>
-          ))}
-        </div>
-
-        {/* Body */}
-        <div className="overflow-y-auto flex-1 px-8 py-3">
-          {tab === "joint" ? (
-            <div className="grid grid-cols-2 gap-2.5">
-              {JOINT_AXES.map((axis) => (
+      {/* Body */}
+      <div className="overflow-y-auto flex-1 px-6 py-2">
+        {tab === "joint" ? (
+          <div className="space-y-2">
+            {JOINT_AXES.map((axis) => (
+              <AxisControl
+                key={axis.key}
+                label={axis.label} unit={axis.unit} color={axis.color}
+                currentValue={jointValue(axis.key as JointKey)}
+                onJog={(dir) => sendJogAxis(axis.key as JointKey, dir)}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <p className="text-[10px] font-black text-gray-400 dark:text-[#9aa8c8] uppercase tracking-wider">Position (mm)</p>
+              {XYZ_AXES.map((axis) => (
                 <AxisControl
                   key={axis.key}
                   label={axis.label} unit={axis.unit} color={axis.color}
-                  currentValue={jointValue(axis.key as JointKey)}
-                  onJog={(dir) => sendJogAxis(axis.key as JointKey, dir)}
+                  currentValue={effectorPose[axis.key as "x" | "y" | "z"]}
+                  onJog={(dir) => sendJogEffector(axis.key, dir)}
                 />
               ))}
             </div>
-          ) : (
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2.5">
-                <p className="text-[10px] font-black text-gray-400 dark:text-[#9aa8c8] uppercase tracking-wider">Position (mm)</p>
-                {XYZ_AXES.map((axis) => (
-                  <AxisControl
-                    key={axis.key}
-                    label={axis.label} unit={axis.unit} color={axis.color}
-                    currentValue={effectorPose[axis.key as "x" | "y" | "z"]}
-                    onJog={(dir) => sendJogEffector(axis.key, dir)}
-                  />
-                ))}
-              </div>
-              <div className="space-y-2.5">
-                <p className="text-[10px] font-black text-gray-400 dark:text-[#9aa8c8] uppercase tracking-wider">Orientation (°)</p>
-                {RPY_AXES.map((axis) => (
-                  <AxisControl
-                    key={axis.key}
-                    label={axis.label} unit={axis.unit} color={axis.color}
-                    currentValue={effectorPose[axis.key as "roll" | "pitch" | "yaw"]}
-                    onJog={(dir) => sendJogEffector(axis.key, dir)}
-                  />
-                ))}
-              </div>
+            <div className="space-y-2">
+              <p className="text-[10px] font-black text-gray-400 dark:text-[#9aa8c8] uppercase tracking-wider">Orientation (°)</p>
+              {RPY_AXES.map((axis) => (
+                <AxisControl
+                  key={axis.key}
+                  label={axis.label} unit={axis.unit} color={axis.color}
+                  currentValue={effectorPose[axis.key as "roll" | "pitch" | "yaw"]}
+                  onJog={(dir) => sendJogEffector(axis.key, dir)}
+                />
+              ))}
             </div>
+          </div>
+        )}
+      </div>
+
+      {/* Command Log */}
+      <div className="mx-6 mb-3 rounded-2xl bg-gray-950 dark:bg-black/60 overflow-hidden border border-white/5 shrink-0">
+        <div className="flex items-center gap-2 px-3 py-2 border-b border-white/5">
+          <Terminal size={11} className="text-green-400" />
+          <span className="text-[10px] font-black text-gray-500 uppercase tracking-wider">Command Log</span>
+          {jogLog.length === 0 && (
+            <span className="text-[10px] text-gray-600 ml-1">— กดปุ่มเพื่อดู</span>
           )}
         </div>
-
-        {/* Command Log */}
-        <div className="mx-8 mb-3 rounded-2xl bg-gray-950 dark:bg-black/60 overflow-hidden border border-white/5">
-          <div className="flex items-center gap-2 px-3 py-2 border-b border-white/5">
-            <Terminal size={11} className="text-green-400" />
-            <span className="text-[10px] font-black text-gray-500 uppercase tracking-wider">Command Log</span>
-            {jogLog.length === 0 && (
-              <span className="text-[10px] text-gray-600 ml-1">— กดปุ่มเพื่อดู</span>
-            )}
-          </div>
-          <div className="h-20 overflow-y-auto px-3 py-2 space-y-0.5 font-mono text-[10px]">
-            {jogLog.length === 0 ? (
-              <p className="text-gray-700 italic">ยังไม่มีคำสั่ง</p>
-            ) : (
-              jogLog.map((entry, i) => (
-                <div key={i} className="flex items-baseline gap-2 leading-relaxed">
-                  <span className="text-gray-600 shrink-0 w-16">{entry.ts}</span>
-                  {entry.cmd.label === "home" ? (
-                    <span className="text-yellow-400">HOME  spd:{entry.cmd.speed as number}%</span>
-                  ) : (
-                    <>
-                      <span className={`shrink-0 w-14 ${entry.cmd.controlMode === "effector" ? "text-purple-400" : "text-cyan-400"}`}>
-                        [{entry.cmd.controlMode as string}]
+        <div className="h-16 overflow-y-auto px-3 py-2 space-y-0.5 font-mono text-[10px]">
+          {jogLog.length === 0 ? (
+            <p className="text-gray-700 italic">ยังไม่มีคำสั่ง</p>
+          ) : (
+            jogLog.map((entry, i) => (
+              <div key={i} className="flex items-baseline gap-2 leading-relaxed">
+                <span className="text-gray-600 shrink-0 w-16">{entry.ts}</span>
+                {entry.cmd.label === "home" ? (
+                  <span className="text-yellow-400">HOME  spd:{entry.cmd.speed as number}%</span>
+                ) : (
+                  <>
+                    <span className={`shrink-0 w-14 ${entry.cmd.controlMode === "effector" ? "text-purple-400" : "text-cyan-400"}`}>
+                      [{entry.cmd.controlMode as string}]
+                    </span>
+                    <span className="text-yellow-300 shrink-0 w-10">{String(entry.cmd.axis)}</span>
+                    <span className={(entry.cmd.direction as number) > 0 ? "text-green-400 shrink-0" : "text-red-400 shrink-0"}>
+                      {(entry.cmd.direction as number) > 0 ? "  +" : "  −"}
+                    </span>
+                    <span className="text-gray-500 shrink-0">spd:{entry.cmd.speed as number}%</span>
+                    {entry.cmd.tcp_x != null && (
+                      <span className="text-purple-500">
+                        tcp:({entry.cmd.tcp_x as number},{entry.cmd.tcp_y as number},{entry.cmd.tcp_z as number})mm
                       </span>
-                      <span className="text-yellow-300 shrink-0 w-10">{String(entry.cmd.axis)}</span>
-                      <span className={(entry.cmd.direction as number) > 0 ? "text-green-400 shrink-0" : "text-red-400 shrink-0"}>
-                        {(entry.cmd.direction as number) > 0 ? "  +" : "  −"}
-                      </span>
-                      <span className="text-gray-500 shrink-0">spd:{entry.cmd.speed as number}%</span>
-                      {entry.cmd.tcp_x != null && (
-                        <span className="text-purple-500">
-                          tcp:({entry.cmd.tcp_x as number},{entry.cmd.tcp_y as number},{entry.cmd.tcp_z as number})mm
-                        </span>
-                      )}
-                    </>
-                  )}
-                </div>
-              ))
-            )}
-          </div>
+                    )}
+                  </>
+                )}
+              </div>
+            ))
+          )}
         </div>
-
-        {/* Footer: Speed + Home */}
-        <div className="px-8 pt-4 pb-7 border-t border-black/5 dark:border-white/7 space-y-3">
-          <div className="flex items-center gap-4">
-            <span className="text-xs font-black text-gray-400 dark:text-[#9aa8c8] uppercase w-14 shrink-0">Speed</span>
-            <input
-              type="range" min="1" max="100" step="1" value={speed}
-              onChange={(e) => setSpeed(Number(e.target.value))}
-              className="flex-1 h-2 cursor-pointer accent-blue-500"
-            />
-            <span className="text-sm font-black text-blue-600 w-12 text-right tabular-nums">{speed}%</span>
-          </div>
-          <button
-            onClick={sendHome}
-            className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-gray-100 dark:bg-[#1a2540] hover:bg-gray-200 dark:hover:bg-[#243050] active:bg-gray-300 dark:active:bg-[#2d3e60] transition-colors font-black text-sm text-gray-700 dark:text-[#b0c4e0]"
-          >
-            <Home size={16} />
-            Home
-          </button>
-        </div>
-
       </div>
+
+      {/* Footer: Speed + Home */}
+      <div className="px-6 pt-3 pb-6 border-t border-black/5 dark:border-white/7 space-y-3 shrink-0">
+        <div className="flex items-center gap-3">
+          <span className="text-xs font-black text-gray-400 dark:text-[#9aa8c8] uppercase w-12 shrink-0">Speed</span>
+          <input
+            type="range" min="1" max="100" step="1" value={speed}
+            onChange={(e) => setSpeed(Number(e.target.value))}
+            className="flex-1 h-2 cursor-pointer accent-blue-500"
+          />
+          <span className="text-sm font-black text-blue-600 w-10 text-right tabular-nums">{speed}%</span>
+        </div>
+        <button
+          onClick={sendHome}
+          className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-gray-100 dark:bg-[#1a2540] hover:bg-gray-200 dark:hover:bg-[#243050] active:bg-gray-300 dark:active:bg-[#2d3e60] transition-colors font-black text-sm text-gray-700 dark:text-[#b0c4e0]"
+        >
+          <Home size={16} />
+          Home
+        </button>
+      </div>
+
+    </div>
+  );
+
+  if (mode === "panel") return panelContent;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      {panelContent}
     </div>
   );
 }

@@ -1,18 +1,21 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { useRos } from "@/context/RosContext";
 import { useViewerFlips } from "@/hooks/useViewerFlips";
 import JobDetailView from "@/components/JobDetailView";
 import JobEditor from "@/components/JobEditor";
 import RosStatusBadge from "@/components/RosStatusBadge";
-import { Activity, LayoutGrid, List, Home, SlidersHorizontal, Pencil, Gamepad2, Settings2, Moon, Sun } from "lucide-react";
+import { Activity, LayoutGrid, List, Home, Pencil, Gamepad2, Settings2, Moon, Sun, Camera } from "lucide-react";
 import { useDarkMode } from "@/hooks/useDarkMode";
 import CalibrationModal from "@/components/CalibrationModal";
 import JogControlPanel from "@/components/JogControlPanel";
+import CameraFeedWidget from "@/components/CameraFeedWidget";
+import RealtimeOverlay from "@/components/RealtimeOverlay";
 
-const RobotViewer3D    = dynamic(() => import("@/components/RobotViewer3D"),    { ssr: false });
-const SplashRobotViewer = dynamic(() => import("@/components/SplashRobotViewer"), { ssr: false });
+const RobotViewer3D       = dynamic(() => import("@/components/RobotViewer3D"),       { ssr: false });
+const SplashRobotViewer   = dynamic(() => import("@/components/SplashRobotViewer"),   { ssr: false });
 
 interface Task {
   id: number;
@@ -58,7 +61,7 @@ const Dashboard = ({
   autoHome: boolean;
   onToggleAutoHome: () => void;
 }) => {
-  const { jointStates, railPos, gripperPos, effectorPose, isConnected, sendGotoPosition, effectiveTcpOffset, calibration } = useRos();
+  const { jointStates, sendGotoPosition, effectiveTcpOffset, calibration } = useRos();
   const { flips } = useViewerFlips();
   const { dark, toggle: toggleDark } = useDarkMode();
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -69,8 +72,8 @@ const Dashboard = ({
     return "card";
   });
   const [loading, setLoading] = useState(true);
-  const [showCalibration, setShowCalibration] = useState(false);
-  const [showJog, setShowJog] = useState(false);
+  const [showCalibration, setShowCalibration]       = useState(false);
+  const [showJog, setShowJog]                       = useState(false);
 
   useEffect(() => {
     loadJobs();
@@ -120,6 +123,13 @@ const Dashboard = ({
           >
             {dark ? <Sun size={22} /> : <Moon size={22} />}
           </button>
+          <Link
+            href="/camera-setup"
+            className="flex items-center gap-2 px-5 py-4 bg-gray-100 hover:bg-gray-200 active:bg-gray-300 rounded-2xl transition-colors font-black text-gray-700"
+            title="ตั้งค่ากล้อง + Calibration"
+          >
+            <Camera size={22} />
+          </Link>
           <button
             onClick={() => sendGotoPosition({ sequence: 0, label: "Home", j1: 0, j2: 0, j3: 0, j4: 0, j5: 0, j6: 0, rail: 0, speed: 20, gripper: 0 })}
             className="flex items-center gap-3 px-8 py-5 bg-black hover:bg-gray-800 active:bg-gray-900 text-white rounded-2xl transition-colors font-black text-lg shadow-lg"
@@ -131,9 +141,11 @@ const Dashboard = ({
       </header>
 
       <div className="flex-1 grid grid-cols-12 gap-10 overflow-hidden">
-        {/* 3D Digital Twin */}
-        <section className="col-span-4 tesla-card overflow-hidden">
+        {/* 3D Digital Twin + Realtime Overlay */}
+        <section className="col-span-4 tesla-card overflow-hidden relative">
           <RobotViewer3D joints={jointStates} flips={flips} tcpOffset={effectiveTcpOffset} tcpFlips={calibration.tcpFlips} />
+
+          <RealtimeOverlay onCalibrate={() => setShowCalibration(true)} />
         </section>
 
         <section className="col-span-4 tesla-card p-8 flex flex-col overflow-hidden">
@@ -284,72 +296,7 @@ const Dashboard = ({
           {showCalibration && <CalibrationModal onClose={() => setShowCalibration(false)} />}
           {showJog && <JogControlPanel onClose={() => setShowJog(false)} />}
 
-          <div className="tesla-card p-10 flex-1 flex flex-col">
-            <h3 className="text-xs font-black text-gray-400 uppercase mb-10 flex items-center gap-3">
-              <div className={`w-2.5 h-2.5 rounded-full ${isConnected ? "bg-blue-500 animate-ping" : "bg-gray-300"}`} />
-              Real-time Data
-              <button
-                onClick={() => setShowCalibration(true)}
-                className="ml-auto w-8 h-8 rounded-xl bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors"
-                title="Calibrate"
-              >
-                <SlidersHorizontal size={14} className="text-gray-500" />
-              </button>
-            </h3>
-            {isConnected ? (
-              <div className="flex flex-col gap-4 flex-1 overflow-y-auto">
-                {/* Joints — compact 3-column */}
-                <div className="grid grid-cols-3 gap-2">
-                  {jointStates.map((v, i) => (
-                    <div key={i} className="p-3 bg-gray-50 rounded-[20px] text-center border border-gray-100/50">
-                      <span className="text-[9px] font-black text-gray-400 block uppercase">J{i + 1}</span>
-                      <span className="text-sm font-mono font-black">{v.toFixed(1)}°</span>
-                    </div>
-                  ))}
-                </div>
-
-                {/* End-Effector Pose */}
-                <div className="p-4 bg-purple-50 rounded-3xl border border-purple-100">
-                  <span className="text-[9px] font-black text-purple-400 block uppercase mb-2">End-Effector</span>
-                  <div className="grid grid-cols-3 gap-x-3 gap-y-1 text-xs font-mono text-purple-600">
-                    <div><span className="opacity-50">X </span>{effectorPose.x.toFixed(1)}</div>
-                    <div><span className="opacity-50">Y </span>{effectorPose.y.toFixed(1)}</div>
-                    <div><span className="opacity-50">Z </span>{effectorPose.z.toFixed(1)}</div>
-                    <div><span className="opacity-50">R </span>{effectorPose.roll.toFixed(1)}°</div>
-                    <div><span className="opacity-50">P </span>{effectorPose.pitch.toFixed(1)}°</div>
-                    <div><span className="opacity-50">Yw </span>{effectorPose.yaw.toFixed(1)}°</div>
-                  </div>
-                </div>
-
-                {/* Rail */}
-                <div className="p-5 bg-blue-600 rounded-[28px] text-white shadow-xl">
-                  <span className="text-[9px] font-black opacity-60 block mb-1.5 uppercase">Linear Rail</span>
-                  <span className="text-3xl font-mono font-black">
-                    {railPos.toFixed(1)}<span className="text-base font-light opacity-50 ml-1">mm</span>
-                  </span>
-                </div>
-
-                {/* Gripper */}
-                <div className="p-5 bg-orange-500 rounded-[28px] text-white shadow-xl">
-                  <span className="text-[9px] font-black opacity-60 block mb-1.5 uppercase">Gripper</span>
-                  <span className="text-3xl font-mono font-black">
-                    {gripperPos.toFixed(0)}<span className="text-base font-light opacity-50 ml-1">%</span>
-                  </span>
-                  <div className="mt-2 w-full h-1.5 bg-white/20 rounded-full overflow-hidden">
-                    <div className="h-full bg-white rounded-full transition-all duration-300" style={{ width: `${gripperPos}%` }} />
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center">
-                <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center">
-                  <Activity size={28} className="text-gray-300" />
-                </div>
-                <p className="text-gray-400 text-sm font-bold">ยังไม่ได้เชื่อมต่อ</p>
-                <p className="text-gray-300 text-xs">กำลังรอ ROS Bridge<br/>{process.env.NEXT_PUBLIC_ROS_URL ?? "ws://localhost:9090"}</p>
-              </div>
-            )}
-          </div>
+          <CameraFeedWidget />
         </section>
       </div>
     </div>

@@ -1,0 +1,13 @@
+# Wrist Camera Service — Python dependencies
+# Core (always required)
+opencv-python>=4.8
+websockets>=12.0
+numpy>=1.24
+
+# Optional: 3D Camera SDKs — uncomment when hardware is confirmed
+# pyrealsense2>=2.54    # Intel RealSense D435 / D455 (pip install)
+# open3d>=0.18          # Point cloud processing & visualization (pip install)
+# pyzed>=4.0            # Stereolabs ZED (ต้อง install จาก ZED SDK installer ก่อน)
+
+# Optional: Object detection
+# ultralytics>=8.0      # YOLOv8 — pip install ultralytics

@@ -411,7 +411,7 @@ export default function JobEditor({
   const [captureLabel, setCaptureLabel] = useState("");
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
   const [dryRunIdx, setDryRunIdx] = useState(-1);
-  const [showJog, setShowJog] = useState(false);
+  const [showJog, setShowJog] = useState(true);
   const { flips } = useViewerFlips();
   const [dryRunDelayMs, setDryRunDelayMs] = useState<number | null>(null);
   const dryRunDelayTotalRef = useRef(0);
@@ -793,19 +793,23 @@ export default function JobEditor({
           </button>
 
           <button
-            onClick={() => setShowJog(true)}
-            className="w-full flex items-center gap-3 px-6 py-4 rounded-2xl bg-gray-50 hover:bg-gray-100 border-2 border-transparent hover:border-gray-200 transition-all active:scale-[0.98]"
+            onClick={() => setShowJog((v) => !v)}
+            className={`w-full flex items-center gap-3 px-6 py-4 rounded-2xl border-2 transition-all active:scale-[0.98] ${
+              showJog
+                ? "bg-gray-900 dark:bg-[#e2eaff] text-white dark:text-[#070d1b] border-transparent"
+                : "bg-gray-50 hover:bg-gray-100 border-transparent hover:border-gray-200"
+            }`}
           >
-            <Gamepad2 size={18} className="text-gray-500 shrink-0" />
+            <Gamepad2 size={18} className={showJog ? "text-white dark:text-[#070d1b] shrink-0" : "text-gray-500 shrink-0"} />
             <div className="text-left">
-              <p className="font-black text-sm leading-tight text-gray-700">Jog</p>
-              <p className="text-xs text-gray-400">ควบคุมด้วยมือ</p>
+              <p className={`font-black text-sm leading-tight ${showJog ? "text-white dark:text-[#070d1b]" : "text-gray-700"}`}>Jog Panel</p>
+              <p className={`text-xs ${showJog ? "text-white/60 dark:text-[#070d1b]/60" : "text-gray-400"}`}>{showJog ? "เปิดอยู่" : "ควบคุมด้วยมือ"}</p>
             </div>
           </button>
         </div>
 
         {/* Middle Panel — 3D digital twin */}
-        <div className="w-[40%] xl:w-[30%] border-r border-gray-100 shrink-0 overflow-hidden">
+        <div className="w-[30%] xl:w-[25%] border-r border-gray-100 shrink-0 overflow-hidden">
           <RobotViewer3D joints={jointStates} flips={flips} tcpOffset={effectiveTcpOffset} tcpFlips={calibration.tcpFlips} />
         </div>
 
@@ -886,6 +890,13 @@ export default function JobEditor({
             </DndContext>
           )}
         </div>
+
+        {/* Jog Side Panel */}
+        {showJog && (
+          <div className="w-80 shrink-0 border-l border-gray-100 dark:border-white/[0.06] overflow-hidden">
+            <JogControlPanel mode="panel" onClose={() => setShowJog(false)} />
+          </div>
+        )}
       </div>
 
       {/* Toast */}
@@ -1067,7 +1078,6 @@ export default function JobEditor({
         </div>
       )}
 
-      {showJog && <JogControlPanel onClose={() => setShowJog(false)} />}
     </div>
   );
 }

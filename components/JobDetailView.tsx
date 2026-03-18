@@ -29,6 +29,9 @@ import {
   Gamepad2,
 } from "lucide-react";
 import JogControlPanel from "@/components/JogControlPanel";
+import CameraFeedWidget from "@/components/CameraFeedWidget";
+import WristCameraWidget from "@/components/WristCameraWidget";
+import RealtimeOverlay from "@/components/RealtimeOverlay";
 
 interface Task {
   id: number;
@@ -635,64 +638,14 @@ export default function JobDetailView({ job, onBack, onUpdate, autoStart = false
       {/* ── Body: left real-time panel + right task panel ── */}
       <div className="flex-1 flex overflow-hidden">
 
-      {/* ── Left panel: real-time data ───────────────────── */}
-      <div className="w-56 bg-white dark:bg-[#0a1428] border-r border-gray-100 shrink-0 flex flex-col p-4 gap-3 overflow-y-auto">
-        <p className="text-[10px] font-black text-gray-400 uppercase flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-blue-500 animate-ping inline-block" />
-          Real-time
-        </p>
-
-        {/* Joints — compact 3-column */}
-        <div className="grid grid-cols-3 gap-1.5">
-          {jointStates.map((v, i) => (
-            <div key={i} className="p-2 bg-gray-50 rounded-xl text-center">
-              <span className="text-[8px] font-black text-gray-400 block uppercase">J{i + 1}</span>
-              <span className="text-xs font-mono font-black">{v.toFixed(1)}°</span>
-              <span className="text-[8px] text-gray-300 font-mono block">{(jointVelocities[i] ?? 0).toFixed(0)}°/s</span>
-            </div>
-          ))}
-        </div>
-
-        {/* Effector Pose */}
-        <div className="p-3 bg-purple-50 rounded-2xl">
-          <p className="text-[8px] font-black text-purple-400 uppercase mb-1.5">Effector Pose</p>
-          <div className="grid grid-cols-3 gap-x-2 gap-y-0.5 text-[10px] font-mono text-purple-600">
-            <div><span className="opacity-50">X </span>{effectorPose.x.toFixed(0)}</div>
-            <div><span className="opacity-50">Y </span>{effectorPose.y.toFixed(0)}</div>
-            <div><span className="opacity-50">Z </span>{effectorPose.z.toFixed(0)}</div>
-            <div><span className="opacity-50">R </span>{effectorPose.roll.toFixed(1)}°</div>
-            <div><span className="opacity-50">P </span>{effectorPose.pitch.toFixed(1)}°</div>
-            <div><span className="opacity-50">Yw </span>{effectorPose.yaw.toFixed(1)}°</div>
-          </div>
-        </div>
-
-        {/* Rail */}
-        <div className="p-3 bg-blue-600 rounded-2xl text-white">
-          <p className="text-[8px] font-black opacity-60 uppercase mb-0.5">Rail</p>
-          <p className="font-mono font-black text-base">
-            {railPos.toFixed(1)}<span className="text-[10px] font-light opacity-50 ml-1">mm</span>
-          </p>
-        </div>
-
-        {/* Gripper */}
-        <div className="p-3 bg-orange-50 rounded-2xl">
-          <p className="text-[8px] font-black text-orange-400 uppercase mb-0.5">Gripper</p>
-          <p className="font-mono font-black text-base text-orange-500">
-            {gripperPos.toFixed(0)}<span className="text-[10px] font-light opacity-50 ml-1">%</span>
-          </p>
-          <div className="mt-1.5 w-full h-1 bg-orange-100 rounded-full overflow-hidden">
-            <div className="h-full bg-orange-400 rounded-full transition-all duration-300" style={{ width: `${gripperPos}%` }} />
-          </div>
-        </div>
-      </div>
-
-      {/* ── Middle panel: 3D digital twin ─────────────────── */}
-      <div className="w-[40%] xl:w-[30%] border-r border-gray-100 shrink-0 overflow-hidden">
+      {/* ── Middle panel: 3D digital twin + realtime overlay ── */}
+      <div className="flex-1 border-r border-gray-100 dark:border-white/5 overflow-hidden relative">
         <RobotViewer3D joints={jointStates} flips={flips} tcpOffset={effectiveTcpOffset} tcpFlips={calibration.tcpFlips} />
+        <RealtimeOverlay />
       </div>
 
       {/* ── Right panel: execution controls + task list ───── */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
 
       {/* ── Execution control bar ────────────────────────── */}
       {isExecuting && (
@@ -943,6 +896,13 @@ export default function JobDetailView({ job, onBack, onUpdate, autoStart = false
       )}
 
       </div> {/* end right panel */}
+
+      {/* ── Camera Safety Panel ──────────────────────────── */}
+      <div className="flex-1 min-w-0 border-l border-gray-100 dark:border-white/5 bg-[#F5F5F7] dark:bg-[#070d1b] flex flex-col p-3 gap-3 overflow-hidden">
+        <CameraFeedWidget />
+        <WristCameraWidget />
+      </div>
+
       </div> {/* end body */}
 
       {/* ── Start Countdown Overlay ───────────────────────── */}

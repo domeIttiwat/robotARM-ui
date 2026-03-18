@@ -8,6 +8,7 @@ import React, {
   useCallback,
 } from "react";
 import * as ROSLIB from "roslib";
+import { loadJetsonConfig, makeWsUrl } from "@/lib/jetsonConfig";
 
 export interface CalibrationData {
   offsets: number[];  // [j1, j2, j3, j4, j5, j6, rail, gripper]
@@ -116,8 +117,9 @@ export const RosProvider = ({ children }: { children: React.ReactNode }) => {
 
   useEffect(() => {
     const connectRos = () => {
+      const cfg = loadJetsonConfig();
       const rosInstance = new ROSLIB.Ros({
-        url: process.env.NEXT_PUBLIC_ROS_URL ?? "ws://localhost:9090",
+        url: makeWsUrl(cfg.ip, cfg.rosPort),
       });
 
       rosInstance.on("connection", () => {
