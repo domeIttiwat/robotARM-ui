@@ -38,7 +38,7 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const { action } = await req.json();
+  const { action, camIndex } = await req.json();
 
   // ── stop ─────────────────────────────────────────────────────────────────
   if (action === "stop") {
@@ -67,7 +67,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "wrist-cam/main.py not found" });
 
     pushLog(`▶ Starting wrist-cam (${pythonExe.includes(".venv") ? ".venv python" : "system python3"})`);
-    proc = spawn(pythonExe, ["main.py"], { cwd: wristDir });
+    const args = ["main.py"];
+    if (camIndex != null) args.push("--cam-index", String(camIndex));
+    proc = spawn(pythonExe, args, { cwd: wristDir });
 
     proc.stdout?.on("data", (d: Buffer) =>
       String(d).split("\n").forEach((l) => l.trim() && pushLog(l))

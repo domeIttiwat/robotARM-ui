@@ -39,7 +39,7 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const { action } = await req.json();
+  const { action, camLeft, camRight } = await req.json();
 
   // ── stop ─────────────────────────────────────────────────────────────────
   if (action === "stop") {
@@ -74,7 +74,10 @@ export async function POST(req: Request) {
     }
 
     pushLog(`▶ Starting detector (${pythonExe.includes(".venv") ? ".venv python" : "system python3"})`);
-    proc = spawn(pythonExe, ["main.py"], { cwd: detectorDir });
+    const args = ["main.py"];
+    if (camLeft  != null) args.push("--cam-left",  String(camLeft));
+    if (camRight != null) args.push("--cam-right", String(camRight));
+    proc = spawn(pythonExe, args, { cwd: detectorDir });
 
     proc.stdout?.on("data", (d: Buffer) =>
       String(d).split("\n").forEach((l) => l.trim() && pushLog(l))
