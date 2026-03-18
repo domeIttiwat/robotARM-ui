@@ -110,6 +110,23 @@ function WsBadge({ connected, label }: { connected: boolean; label: string }) {
   );
 }
 
+function ToggleSwitch({ enabled, onChange }: { enabled: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button
+      onClick={() => onChange(!enabled)}
+      className={`relative shrink-0 rounded-full transition-colors duration-200 ${
+        enabled ? "bg-green-500" : "bg-gray-300 dark:bg-gray-600"
+      }`}
+      style={{ width: 36, height: 20 }}
+    >
+      <span
+        className="absolute top-0.5 rounded-full bg-white shadow-sm transition-all duration-200"
+        style={{ width: 16, height: 16, left: enabled ? 18 : 2 }}
+      />
+    </button>
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Connection Config Bar
 // ─────────────────────────────────────────────────────────────────────────────
@@ -344,8 +361,9 @@ function ProcButtons({
 // LEFT: Safety Camera Panel
 // ─────────────────────────────────────────────────────────────────────────────
 
-function SafetyPanel({ wsUrl, camLeft, camRight, restartTrigger }: {
+function SafetyPanel({ wsUrl, camLeft, camRight, restartTrigger, enabled, onToggle }: {
   wsUrl: string; camLeft: number; camRight: number; restartTrigger: number;
+  enabled: boolean; onToggle: (v: boolean) => void;
 }) {
   const [connected, setConnected]   = useState(false);
   const [frame, setFrame]           = useState<SafetyFrame | null>(null);
@@ -380,12 +398,16 @@ function SafetyPanel({ wsUrl, camLeft, camRight, restartTrigger }: {
     ws.onmessage = (e) => { try { setFrame(JSON.parse(e.data)); frameCount.current++; } catch { /* ignore */ } };
   }, [wsUrl]);
 
-  useEffect(() => { wsConnect(); return () => wsRef.current?.close(); }, [wsConnect]);
   useEffect(() => {
-    if (connected) return;
+    if (!enabled) { wsRef.current?.close(); wsRef.current = null; return; }
+    wsConnect();
+    return () => wsRef.current?.close();
+  }, [wsConnect, enabled]);
+  useEffect(() => {
+    if (!enabled || connected) return;
     const t = setInterval(() => { if (!wsRef.current) wsConnect(); }, 3000);
     return () => clearInterval(t);
-  }, [connected, wsConnect]);
+  }, [connected, wsConnect, enabled]);
 
   const sendThresholds = (warn: number, stop: number) => {
     if (wsRef.current?.readyState === WebSocket.OPEN)
@@ -408,6 +430,12 @@ function SafetyPanel({ wsUrl, camLeft, camRight, restartTrigger }: {
     await new Promise((r) => setTimeout(r, 800));
     refreshProc();
     setProcLoading(false);
+  };
+
+  const handleToggle = async (newVal: boolean) => {
+    onToggle(newVal);
+    if (newVal) await procAction("start");
+    else await procAction("stop");
   };
 
   useEffect(() => {
@@ -451,11 +479,15 @@ function SafetyPanel({ wsUrl, camLeft, camRight, restartTrigger }: {
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
               <h2 className="font-black text-gray-900 dark:text-white text-sm leading-none">Safety System</h2>
-              <WsBadge connected={connected} label={connected && fps != null ? `${fps} fps` : connected ? "…" : "Offline"} />
+              {enabled && <WsBadge connected={connected} label={connected && fps != null ? `${fps} fps` : connected ? "…" : "Offline"} />}
             </div>
             <p className="text-[10px] text-gray-400 mt-0.5 truncate font-mono">{wsUrl}</p>
           </div>
-          <ProcButtons proc={proc} onAction={procAction} loading={procLoading} runColor="blue" />
+          <ToggleSwitch enabled={enabled} onChange={handleToggle} />
+          <span className={`text-xs font-black shrink-0 ${enabled ? "text-green-600 dark:text-green-400" : "text-gray-400"}`}>
+            {enabled ? "ON" : "OFF"}
+          </span>
+          {enabled && <ProcButtons proc={proc} onAction={procAction} loading={procLoading} runColor="blue" />}
         </div>
       </div>
 
@@ -463,15 +495,22 @@ function SafetyPanel({ wsUrl, camLeft, camRight, restartTrigger }: {
       <div className="flex-1 overflow-y-auto bg-white dark:bg-[#0a1428] px-4 py-3 space-y-3">
 
         {/* Safety Level banner */}
-        <div className={`flex items-center gap-3 px-4 py-3 rounded-2xl ${sfCfg.bg} ${level === 2 ? "animate-pulse" : ""}`}>
-          <SafetyIcon size={20} className={sfCfg.text} />
-          <span className={`text-base font-black ${sfCfg.text}`}>{sfCfg.label}</span>
-          {frame?.distance_mm != null && (
-            <span className={`ml-auto text-xl font-mono font-black tabular-nums ${sfCfg.text}`}>
-              {frame.distance_mm.toFixed(0)}<span className="text-xs opacity-60 ml-1">mm</span>
-            </span>
-          )}
-        </div>
+        {enabled ? (
+          <div className={`flex items-center gap-3 px-4 py-3 rounded-2xl ${sfCfg.bg} ${level === 2 ? "animate-pulse" : ""}`}>
+            <SafetyIcon size={20} className={sfCfg.text} />
+            <span className={`text-base font-black ${sfCfg.text}`}>{sfCfg.label}</span>
+            {frame?.distance_mm != null && (
+              <span className={`ml-auto text-xl font-mono font-black tabular-nums ${sfCfg.text}`}>
+                {frame.distance_mm.toFixed(0)}<span className="text-xs opacity-60 ml-1">mm</span>
+              </span>
+            )}
+          </div>
+        ) : (
+          <div className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-gray-100 dark:bg-gray-800/40">
+            <Camera size={20} className="text-gray-400" />
+            <span className="text-base font-black text-gray-400">Camera Off</span>
+          </div>
+        )}
 
         {/* Live Feed — main content */}
         <div className="space-y-2">
@@ -484,7 +523,12 @@ function SafetyPanel({ wsUrl, camLeft, camRight, restartTrigger }: {
                 <div className="absolute top-2 left-2 z-10 text-[9px] font-black text-white bg-black/60 px-2 py-0.5 rounded-full backdrop-blur-sm">
                   {label}
                 </div>
-                {!assigned ? (
+                {!enabled ? (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 bg-gray-900/80">
+                    <Camera size={22} className="text-gray-600 opacity-40" />
+                    <span className="text-[10px] text-gray-500">Camera Off</span>
+                  </div>
+                ) : !assigned ? (
                   <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5">
                     <Camera size={22} className="text-gray-700 opacity-30" />
                     <span className="text-[10px] text-gray-600">ไม่ได้ assign</span>
@@ -503,9 +547,8 @@ function SafetyPanel({ wsUrl, camLeft, camRight, restartTrigger }: {
             ))}
           </div>
 
-
           {/* Stats row */}
-          {frame && (
+          {enabled && frame && (
             <div className="grid grid-cols-3 gap-2">
               <div className="bg-gray-50 dark:bg-[#111d35] rounded-xl px-3 py-2.5">
                 <p className="text-[9px] font-black text-gray-400 uppercase mb-1">ระยะห่าง</p>
@@ -618,8 +661,9 @@ function SafetyPanel({ wsUrl, camLeft, camRight, restartTrigger }: {
 // RIGHT: Wrist Camera Panel
 // ─────────────────────────────────────────────────────────────────────────────
 
-function WristPanel({ wsUrl, camIndex, restartTrigger }: {
+function WristPanel({ wsUrl, camIndex, restartTrigger, enabled, onToggle }: {
   wsUrl: string; camIndex: number; restartTrigger: number;
+  enabled: boolean; onToggle: (v: boolean) => void;
 }) {
   const [connected, setConnected]     = useState(false);
   const [frame, setFrame]             = useState<WristFrame | null>(null);
@@ -640,12 +684,16 @@ function WristPanel({ wsUrl, camIndex, restartTrigger }: {
     ws.onmessage = (e) => { try { setFrame(JSON.parse(e.data)); } catch { /* ignore */ } };
   }, [wsUrl]);
 
-  useEffect(() => { wsConnect(); return () => wsRef.current?.close(); }, [wsConnect]);
   useEffect(() => {
-    if (connected) return;
+    if (!enabled) { wsRef.current?.close(); wsRef.current = null; return; }
+    wsConnect();
+    return () => wsRef.current?.close();
+  }, [wsConnect, enabled]);
+  useEffect(() => {
+    if (!enabled || connected) return;
     const t = setInterval(() => { if (!wsRef.current) wsConnect(); }, 3000);
     return () => clearInterval(t);
-  }, [connected, wsConnect]);
+  }, [connected, wsConnect, enabled]);
 
   const refreshProc = useCallback(() => {
     fetch("/api/camera/wrist-process").then((r) => r.json()).then(setProc).catch(() => {});
@@ -662,6 +710,12 @@ function WristPanel({ wsUrl, camIndex, restartTrigger }: {
     await new Promise((r) => setTimeout(r, 800));
     refreshProc();
     setProcLoading(false);
+  };
+
+  const handleToggle = async (newVal: boolean) => {
+    onToggle(newVal);
+    if (newVal) await procAction("start");
+    else await procAction("stop");
   };
 
   useEffect(() => {
@@ -703,32 +757,40 @@ function WristPanel({ wsUrl, camIndex, restartTrigger }: {
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
               <h2 className="font-black text-gray-900 dark:text-white text-sm leading-none">Wrist Camera</h2>
-              <WsBadge
-                connected={connected}
-                label={connected && frame ? `${frame.fps != null ? frame.fps.toFixed(0) : "?"} fps` : connected ? "…" : "Offline"}
-              />
+              {enabled && (
+                <WsBadge
+                  connected={connected}
+                  label={connected && frame ? `${frame.fps != null ? frame.fps.toFixed(0) : "?"} fps` : connected ? "…" : "Offline"}
+                />
+              )}
             </div>
             <p className="text-[10px] text-gray-400 mt-0.5 truncate font-mono">{wsUrl}</p>
           </div>
 
-          {/* RGB / Depth toggle */}
-          <div className="flex gap-0.5 bg-gray-100 dark:bg-[#111d35] rounded-full p-0.5 shrink-0">
-            {(["rgb", "depth"] as const).map((m) => (
-              <button
-                key={m}
-                onClick={() => switchMode(m)}
-                className={`px-3 h-8 rounded-full text-[11px] font-black transition-all flex items-center gap-1.5 ${
-                  viewMode === m
-                    ? "bg-white dark:bg-[#1a2540] text-black dark:text-white shadow-sm"
-                    : "text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-                }`}
-              >
-                {m === "rgb" ? <><Eye size={11} /> RGB</> : <><Layers size={11} /> Depth</>}
-              </button>
-            ))}
-          </div>
+          {/* RGB / Depth toggle — only when enabled */}
+          {enabled && (
+            <div className="flex gap-0.5 bg-gray-100 dark:bg-[#111d35] rounded-full p-0.5 shrink-0">
+              {(["rgb", "depth"] as const).map((m) => (
+                <button
+                  key={m}
+                  onClick={() => switchMode(m)}
+                  className={`px-3 h-8 rounded-full text-[11px] font-black transition-all flex items-center gap-1.5 ${
+                    viewMode === m
+                      ? "bg-white dark:bg-[#1a2540] text-black dark:text-white shadow-sm"
+                      : "text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                  }`}
+                >
+                  {m === "rgb" ? <><Eye size={11} /> RGB</> : <><Layers size={11} /> Depth</>}
+                </button>
+              ))}
+            </div>
+          )}
 
-          <ProcButtons proc={proc} onAction={procAction} loading={procLoading} runColor="indigo" />
+          <ToggleSwitch enabled={enabled} onChange={handleToggle} />
+          <span className={`text-xs font-black shrink-0 ${enabled ? "text-green-600 dark:text-green-400" : "text-gray-400"}`}>
+            {enabled ? "ON" : "OFF"}
+          </span>
+          {enabled && <ProcButtons proc={proc} onAction={procAction} loading={procLoading} runColor="indigo" />}
         </div>
       </div>
 
@@ -745,13 +807,13 @@ function WristPanel({ wsUrl, camIndex, restartTrigger }: {
         {/* Live Feed — main content */}
         <div className="relative rounded-2xl overflow-hidden bg-black" style={{ aspectRatio: "16/10" }}>
           <div className="absolute top-2 left-2 z-10 flex items-center gap-1.5 bg-black/65 backdrop-blur-sm px-2 py-0.5 rounded-full">
-            <div className={`w-1.5 h-1.5 rounded-full ${connected ? "bg-indigo-400 animate-pulse" : "bg-gray-600"}`} />
+            <div className={`w-1.5 h-1.5 rounded-full ${enabled && connected ? "bg-indigo-400 animate-pulse" : "bg-gray-600"}`} />
             <span className="text-[9px] font-black text-white/85">WRIST CAM</span>
           </div>
-          {viewMode === "depth" && (
+          {enabled && viewMode === "depth" && (
             <div className="absolute top-2 right-2 z-10 bg-indigo-600/80 text-white text-[9px] font-black px-2 py-0.5 rounded-full">DEPTH</div>
           )}
-          {frame?.objects && frame.objects.length > 0 && (
+          {enabled && frame?.objects && frame.objects.length > 0 && (
             <div className="absolute bottom-2 left-2 z-10 flex flex-wrap gap-1">
               {frame.objects.slice(0, 4).map((obj, i) => (
                 <span key={i} className="bg-yellow-400/90 text-black text-[9px] font-black px-2 py-0.5 rounded-full">
@@ -760,7 +822,12 @@ function WristPanel({ wsUrl, camIndex, restartTrigger }: {
               ))}
             </div>
           )}
-          {camIndex < 0 ? (
+          {!enabled ? (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 bg-gray-900/80">
+              <Camera size={28} className="text-gray-600 opacity-40" />
+              <span className="text-[10px] text-gray-500">Camera Off</span>
+            </div>
+          ) : camIndex < 0 ? (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5">
               <Camera size={28} className="text-gray-700 opacity-30" />
               <span className="text-[10px] text-gray-600">ไม่ได้ assign</span>
@@ -975,23 +1042,33 @@ function CameraAssignBar({
 
 export default function CameraSetupPage() {
   // Use safe SSR defaults first, then load localStorage after hydration
-  const [config, setConfig]          = useState<JetsonConfig>({ ip: "localhost", rosPort: 9090, safetyPort: 8765, wristPort: 8766 });
-  const [camCfg, setCamCfg]          = useState<CameraConfig>({ safetyLeft: -1, safetyRight: -1, wrist: -1 });
-  const [restartTrigger, setRestart] = useState(0);
+  const [config, setConfig]              = useState<JetsonConfig>({ ip: "localhost", rosPort: 9090, safetyPort: 8765, wristPort: 8766 });
+  const [camCfg, setCamCfg]              = useState<CameraConfig>({ safetyLeft: -1, safetyRight: -1, wrist: -1, safetyEnabled: false, wristEnabled: false });
+  const [safetyRestart, setSafetyRestart] = useState(0);
+  const [wristRestart,  setWristRestart]  = useState(0);
 
   useEffect(() => {
     const cfg = loadCameraConfig();
     setConfig(loadJetsonConfig());
     setCamCfg(cfg);
-    // Auto-start: if any camera is assigned, trigger processes
-    if (cfg.safetyLeft >= 0 || cfg.safetyRight >= 0 || cfg.wrist >= 0) {
-      setRestart(1);
-    }
+    // No auto-start — user controls camera on/off via toggle
   }, []);
 
   const handleApplyConfig = (cfg: JetsonConfig) => {
     saveJetsonConfig(cfg);
     setConfig(cfg);
+  };
+
+  const handleSafetyToggle = (v: boolean) => {
+    const newCfg = { ...camCfg, safetyEnabled: v };
+    setCamCfg(newCfg);
+    saveCameraConfig(newCfg);
+  };
+
+  const handleWristToggle = (v: boolean) => {
+    const newCfg = { ...camCfg, wristEnabled: v };
+    setCamCfg(newCfg);
+    saveCameraConfig(newCfg);
   };
 
   const wsSafetyUrl = makeWsUrl(config.ip, config.safetyPort);
@@ -1024,12 +1101,25 @@ export default function CameraSetupPage() {
       <ConnectionBar config={config} onApply={handleApplyConfig} />
 
       {/* ── Camera Assignment Bar ────────────────────────────────────────────── */}
-      <CameraAssignBar camCfg={camCfg} onChange={setCamCfg} onApplyAndRestart={() => setRestart((n) => n + 1)} />
+      <CameraAssignBar
+        camCfg={camCfg}
+        onChange={setCamCfg}
+        onApplyAndRestart={() => {
+          if (camCfg.safetyEnabled) setSafetyRestart((n) => n + 1);
+          if (camCfg.wristEnabled)  setWristRestart((n) => n + 1);
+        }}
+      />
 
       {/* ── Body: 2 equal columns ────────────────────────────────────────────── */}
       <div className="flex-1 grid grid-cols-2 overflow-hidden">
-        <SafetyPanel wsUrl={wsSafetyUrl} camLeft={camCfg.safetyLeft} camRight={camCfg.safetyRight} restartTrigger={restartTrigger} />
-        <WristPanel  wsUrl={wsWristUrl}  camIndex={camCfg.wrist}     restartTrigger={restartTrigger} />
+        <SafetyPanel
+          wsUrl={wsSafetyUrl} camLeft={camCfg.safetyLeft} camRight={camCfg.safetyRight}
+          restartTrigger={safetyRestart} enabled={camCfg.safetyEnabled} onToggle={handleSafetyToggle}
+        />
+        <WristPanel
+          wsUrl={wsWristUrl} camIndex={camCfg.wrist}
+          restartTrigger={wristRestart} enabled={camCfg.wristEnabled} onToggle={handleWristToggle}
+        />
       </div>
 
     </div>
