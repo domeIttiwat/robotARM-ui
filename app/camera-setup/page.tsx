@@ -679,7 +679,7 @@ function WristPanel({ wsUrl, camIndex, restartTrigger, enabled, onToggle }: {
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
     ws.onopen    = () => setConnected(true);
-    ws.onclose   = () => { setConnected(false); wsRef.current = null; };
+    ws.onclose   = () => { setConnected(false); wsRef.current = null; setFrame(null); };
     ws.onerror   = () => setConnected(false);
     ws.onmessage = (e) => { try { setFrame(JSON.parse(e.data)); } catch { /* ignore */ } };
   }, [wsUrl]);
@@ -691,9 +691,11 @@ function WristPanel({ wsUrl, camIndex, restartTrigger, enabled, onToggle }: {
   }, [wsConnect, enabled]);
   useEffect(() => {
     if (!enabled || connected) return;
-    const t = setInterval(() => { if (!wsRef.current) wsConnect(); }, 3000);
+    // Reconnect faster when process is running (just waiting for WS port to open)
+    const delay = proc.running ? 1000 : 3000;
+    const t = setInterval(() => { if (!wsRef.current) wsConnect(); }, delay);
     return () => clearInterval(t);
-  }, [connected, wsConnect, enabled]);
+  }, [connected, wsConnect, enabled, proc.running]);
 
   const refreshProc = useCallback(() => {
     fetch("/api/camera/wrist-process").then((r) => r.json()).then(setProc).catch(() => {});
@@ -714,8 +716,14 @@ function WristPanel({ wsUrl, camIndex, restartTrigger, enabled, onToggle }: {
 
   const handleToggle = async (newVal: boolean) => {
     onToggle(newVal);
-    if (newVal) await procAction("start");
-    else await procAction("stop");
+    if (newVal) {
+      await procAction("start");
+      // Python needs ~2-3s to import packages and open WS port; retry WS connection after startup
+      setTimeout(() => { if (!wsRef.current) wsConnect(); }, 2000);
+      setTimeout(() => { if (!wsRef.current) wsConnect(); }, 4000);
+    } else {
+      await procAction("stop");
+    }
   };
 
   useEffect(() => {
@@ -831,14 +839,32 @@ function WristPanel({ wsUrl, camIndex, restartTrigger, enabled, onToggle }: {
               <Camera size={28} className="text-gray-700 animate-pulse" />
               <span className="text-[10px] text-gray-600">รอ frame…</span>
             </div>
+          ) : proc.running ? (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5">
+              <Wifi size={28} className="text-indigo-700 animate-pulse" />
+              <span className="text-[10px] text-indigo-500">กำลังเชื่อมต่อ…</span>
+              <span className="text-[9px] text-gray-600 font-mono">{wsUrl}</span>
+            </div>
           ) : (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5">
               <WifiOff size={28} className="text-gray-700" />
-              <p className="text-gray-600 text-xs">Wrist cam ออฟไลน์</p>
-              {camIndex < 0 && <p className="text-gray-600 text-[10px]">ยังไม่ได้ assign camera index</p>}
+              <p className="text-gray-500 text-xs font-bold">Process ไม่ทำงาน</p>
+              <p className="text-gray-600 text-[10px]">กด Start เพื่อเริ่ม</p>
             </div>
           )}
         </div>
+
+        {/* Process crash banner — show last log lines when process stopped unexpectedly */}
+        {enabled && !proc.running && proc.logs.length > 0 && (
+          <div className="rounded-xl bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-800/30 px-3 py-2.5 space-y-1">
+            <p className="text-[10px] font-black text-red-600 dark:text-red-400 flex items-center gap-1.5">
+              <AlertTriangle size={11} /> Process หยุดทำงาน — log ล่าสุด:
+            </p>
+            {proc.logs.slice(-4).map((line, i) => (
+              <p key={i} className="text-[10px] font-mono text-red-400 dark:text-red-500 leading-relaxed truncate">{line}</p>
+            ))}
+          </div>
+        )}
 
         {/* Detected objects list */}
         {frame?.objects && frame.objects.length > 0 && (
