@@ -101,7 +101,9 @@ class OpenCVCamera(CameraInterface):
         self._cap: Optional[cv2.VideoCapture] = None
 
     def open(self) -> bool:
-        self._cap = cv2.VideoCapture(self._index)
+        # Windows: force DirectShow backend — avoids MSMF slow/silent-fail issues
+        backend = cv2.CAP_DSHOW if sys.platform == "win32" else cv2.CAP_ANY
+        self._cap = cv2.VideoCapture(self._index, backend)
         if not self._cap.isOpened():
             log.warning("Camera %d not available — use mock_wrist.py for testing", self._index)
             return False
@@ -335,6 +337,9 @@ def main():
     parser.add_argument("--mode",      type=str,   default="rgb",   choices=["rgb", "depth"],
                         help="Initial display mode")
     args = parser.parse_args()
+
+    if sys.platform == "win32":
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
     svc = WristCamService(args)
     bg  = threading.Thread(target=svc.run, daemon=True)

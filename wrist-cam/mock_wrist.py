@@ -20,6 +20,7 @@ import base64
 import json
 import logging
 import math
+import sys
 import threading
 import time
 
@@ -184,6 +185,9 @@ def main():
     parser = argparse.ArgumentParser(description="Mock wrist camera (no hardware needed)")
     parser.add_argument("--ws-port", type=int, default=8766, help="WebSocket port")
     args = parser.parse_args()
+
+    if sys.platform == "win32":
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
     svc = MockWristService(args)
     bg  = threading.Thread(target=svc.run, daemon=True)

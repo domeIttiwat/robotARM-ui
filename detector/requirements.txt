@@ -1,5 +1,5 @@
 ultralytics       # YOLOv8
 opencv-python     # กล้อง + วาด bbox
-websockets        # stream ภาพ + event ไป browser
-roslibpy          # คุย ROS bridge ws://localhost:9090
+websockets>=12.0  # stream ภาพ + event ไป browser (v12+ รองรับ Windows asyncio)
+roslibpy          # คุย ROS bridge ws://localhost:9090 (optional — graceful fallback if missing)
 numpy

@@ -8,6 +8,7 @@ import { NextResponse } from "next/server";
 import { spawn, ChildProcess } from "child_process";
 import path from "path";
 import fs from "fs";
+import { venvBin, systemPython } from "@/lib/venvPath";
 
 let proc: ChildProcess | null = null;
 let setupProc: ChildProcess | null = null;
@@ -27,7 +28,7 @@ function isSetupRunning() {
 }
 
 export async function GET() {
-  const venvPython = path.join(process.cwd(), "wrist-cam", ".venv", "bin", "python");
+  const venvPython = venvBin(path.join(process.cwd(), "wrist-cam", ".venv"), "python");
   return NextResponse.json({
     running:      isRunning(),
     pid:          proc?.pid ?? null,
@@ -59,8 +60,8 @@ export async function POST(req: Request) {
     }
 
     const wristDir   = path.join(process.cwd(), "wrist-cam");
-    const venvPython = path.join(wristDir, ".venv", "bin", "python");
-    const pythonExe  = fs.existsSync(venvPython) ? venvPython : "python3";
+    const venvPython = venvBin(path.join(wristDir, ".venv"), "python");
+    const pythonExe  = fs.existsSync(venvPython) ? venvPython : systemPython;
     const scriptPath = path.join(wristDir, "main.py");
 
     if (!fs.existsSync(scriptPath))
@@ -91,7 +92,7 @@ export async function POST(req: Request) {
 
     const wristDir = path.join(process.cwd(), "wrist-cam");
     const venvDir  = path.join(wristDir, ".venv");
-    const venvPip  = path.join(venvDir, "bin", "pip");
+    const venvPip  = venvBin(venvDir, "pip");
     const reqPath  = path.join(wristDir, "requirements.txt");
 
     if (!fs.existsSync(reqPath))
@@ -102,7 +103,7 @@ export async function POST(req: Request) {
     const steps: Array<() => ChildProcess> = [];
     if (!fs.existsSync(venvDir)) {
       pushLog("⚙ Creating .venv ...");
-      steps.push(() => spawn("python3", ["-m", "venv", ".venv"], { cwd: wristDir }));
+      steps.push(() => spawn(systemPython, ["-m", "venv", ".venv"], { cwd: wristDir }));
     }
 
     const runSteps = (idx: number) => {
@@ -136,7 +137,7 @@ export async function POST(req: Request) {
   if (action === "reinstall") {
     if (isSetupRunning()) return NextResponse.json({ ok: false, error: "Setup already running" });
     const wristDir = path.join(process.cwd(), "wrist-cam");
-    const venvPip  = path.join(wristDir, ".venv", "bin", "pip");
+    const venvPip  = venvBin(path.join(wristDir, ".venv"), "pip");
     if (!fs.existsSync(venvPip)) {
       return NextResponse.json({ ok: false, error: "venv not found — run Setup first" });
     }

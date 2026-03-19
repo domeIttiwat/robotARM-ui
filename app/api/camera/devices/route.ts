@@ -26,6 +26,16 @@ if platform.system() == 'Darwin':
                     cap.release()
         except Exception:
             pass
+elif platform.system() == 'Windows':
+    try:
+        import cv2
+        for i in range(10):
+            cap = cv2.VideoCapture(i)
+            if cap.isOpened():
+                devices.append({'index': i, 'name': f'Camera {i}', 'device': str(i)})
+                cap.release()
+    except Exception:
+        pass
 else:
     for i in range(10):
         dev = f'/dev/video{i}'
@@ -42,14 +52,15 @@ print(json.dumps(devices))
 `;
 
 export async function GET() {
-  const result = spawnSync("python3", ["-c", PROBE_SCRIPT], {
+  const pythonCmd = process.platform === "win32" ? "python" : "python3";
+  const result = spawnSync(pythonCmd, ["-c", PROBE_SCRIPT], {
     timeout: 15000,
     encoding: "utf8",
   });
 
   if (result.error) {
     return NextResponse.json(
-      { devices: [], error: `python3 not found: ${result.error.message}` },
+      { devices: [], error: `${pythonCmd} not found: ${result.error.message}` },
     );
   }
   if (result.status !== 0) {

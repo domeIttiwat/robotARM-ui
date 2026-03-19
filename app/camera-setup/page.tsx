@@ -222,7 +222,7 @@ const CAL_FILES = [
 ] as const;
 
 const SAFETY_CAL_STEPS = [
-  { title: "1. สร้าง Python Environment", cmds: ["cd detector", "python -m venv .venv", "source .venv/bin/activate", "pip install -r requirements.txt"], fileKeys: [] as string[] },
+  { title: "1. สร้าง Python Environment", cmds: ["cd detector", "python -m venv .venv", "source .venv/bin/activate  # macOS/Linux", ".venv\\Scripts\\activate  # Windows", "pip install -r requirements.txt"], fileKeys: [] as string[] },
   { title: "2. Intrinsic — CAM 1 (Left 45°)",  cmds: ["python calibrate_intrinsic.py --camera 0"], fileKeys: ["leftIntrinsic"]  },
   { title: "3. Intrinsic — CAM 2 (Right 45°)", cmds: ["python calibrate_intrinsic.py --camera 1"], fileKeys: ["rightIntrinsic"] },
   { title: "4. Extrinsic (ทั้ง 2 กล้อง)",       cmds: ["python calibrate_extrinsic.py"],             fileKeys: ["leftExtrinsic", "rightExtrinsic"] },
@@ -263,7 +263,7 @@ function CalStep({ step, calStatus, copied, onCopy }: {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const WRIST_SETUP_STEPS = [
-  { title: "1. สร้าง Python Environment",         note: undefined as string | undefined, cmds: ["cd wrist-cam", "python -m venv .venv", "source .venv/bin/activate", "pip install -r requirements.txt"] },
+  { title: "1. สร้าง Python Environment",         note: undefined as string | undefined, cmds: ["cd wrist-cam", "python -m venv .venv", "source .venv/bin/activate  # macOS/Linux", ".venv\\Scripts\\activate  # Windows", "pip install -r requirements.txt"] },
   { title: "2. ทดสอบโดยไม่ต้องมีกล้อง (Mock)",    note: undefined, cmds: ["python mock_wrist.py"] },
   { title: "3. กล้องจริง — USB / OpenCV",          note: "เปลี่ยน --cam-index ให้ตรงกับ device index ของกล้อง", cmds: ["python main.py --cam-index 2"] },
   { title: "4. Intel RealSense (RGB + Depth)",    note: "uncomment RealSenseCamera ใน main.py แล้วรัน", cmds: ["pip install pyrealsense2", "# แก้ไข main.py: driver = RealSenseCamera()", "python main.py"] },

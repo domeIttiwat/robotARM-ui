@@ -30,9 +30,14 @@ from typing import Optional
 
 import cv2
 import numpy as np
-import roslibpy
 import websockets
 from ultralytics import YOLO
+
+try:
+    import roslibpy
+    _ROSLIBPY_OK = True
+except ImportError:
+    _ROSLIBPY_OK = False
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -53,6 +58,9 @@ FK_L1    = 250.0
 FK_L2EFF = 220.0 + 160.0   # L2 + L3 extending along same direction
 
 CAL_DIR = os.path.join(os.path.dirname(__file__), "calibration")
+
+# Windows: force DirectShow backend — avoids MSMF slow/silent-fail issues
+_CV2_BACKEND = cv2.CAP_DSHOW if sys.platform == "win32" else cv2.CAP_ANY
 
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -211,6 +219,10 @@ class SafetyDetector:
     # ── ROS connection ────────────────────────────────────────────────────────
 
     def _connect_ros(self):
+        if not _ROSLIBPY_OK:
+            log.warning("roslibpy not installed — running without ROS. Install: pip install roslibpy")
+            self._ros_connected = False
+            return
         try:
             client = roslibpy.Ros(host=self.args.ros_host, port=self.args.ros_port)
             client.run_in_thread()   # non-blocking — ไม่บล็อค WebSocket server
@@ -262,8 +274,8 @@ class SafetyDetector:
         cal_l = load_calibration("left")
         cal_r = load_calibration("right")
 
-        cap_l = cv2.VideoCapture(self.args.cam_left)
-        cap_r = cv2.VideoCapture(self.args.cam_right)
+        cap_l = cv2.VideoCapture(self.args.cam_left,  _CV2_BACKEND)
+        cap_r = cv2.VideoCapture(self.args.cam_right, _CV2_BACKEND)
 
         for cap, name in [(cap_l, "CAM-L"), (cap_r, "CAM-R")]:
             if not cap.isOpened():
@@ -449,6 +461,9 @@ def main():
     parser.add_argument("--thresh-warn",type=float, default=DEFAULT_THRESH_WARN, help="Distance (mm): level 0→1")
     parser.add_argument("--thresh-stop",type=float, default=DEFAULT_THRESH_STOP, help="Distance (mm): level 1→2")
     args = parser.parse_args()
+
+    if sys.platform == "win32":
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
     detector = SafetyDetector(args)
     detector._connect_ros()

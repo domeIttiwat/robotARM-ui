@@ -10,8 +10,8 @@
     "seed": "tsx prisma/seed.ts",
     "mock-ros": "tsx scripts/mock-ros.ts",
     "dev:full": "concurrently --names \"UI,ROS\" --prefix-colors \"blue,green\" \"next dev -p 3001\" \"tsx scripts/mock-ros.ts\"",
-    "sim": "bash scripts/start-sim.sh",
-    "sim:setup": "cd RobotArm_Project && python -m venv venv && venv/bin/pip install -r requirements.txt"
+    "sim": "node scripts/start-sim.js",
+    "sim:setup": "node scripts/setup-sim.js"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

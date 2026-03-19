@@ -8,6 +8,7 @@ import { NextResponse } from "next/server";
 import { spawn, ChildProcess } from "child_process";
 import path from "path";
 import fs from "fs";
+import { venvBin, systemPython } from "@/lib/venvPath";
 
 let proc: ChildProcess | null = null;
 let setupProc: ChildProcess | null = null;
@@ -28,7 +29,7 @@ function isSetupRunning() {
 }
 
 export async function GET() {
-  const venvPython = path.join(process.cwd(), "detector", ".venv", "bin", "python");
+  const venvPython = venvBin(path.join(process.cwd(), "detector", ".venv"), "python");
   return NextResponse.json({
     running:      isRunning(),
     pid:          proc?.pid ?? null,
@@ -65,8 +66,8 @@ export async function POST(req: Request) {
     }
 
     const detectorDir = path.join(process.cwd(), "detector");
-    const venvPython  = path.join(detectorDir, ".venv", "bin", "python");
-    const pythonExe   = fs.existsSync(venvPython) ? venvPython : "python3";
+    const venvPython  = venvBin(path.join(detectorDir, ".venv"), "python");
+    const pythonExe   = fs.existsSync(venvPython) ? venvPython : systemPython;
     const scriptPath  = path.join(detectorDir, "main.py");
 
     if (!fs.existsSync(scriptPath)) {
@@ -101,7 +102,7 @@ export async function POST(req: Request) {
 
     const detectorDir = path.join(process.cwd(), "detector");
     const venvDir     = path.join(detectorDir, ".venv");
-    const venvPip     = path.join(venvDir, "bin", "pip");
+    const venvPip     = venvBin(venvDir, "pip");
     const reqPath     = path.join(detectorDir, "requirements.txt");
 
     if (!fs.existsSync(reqPath)) {
@@ -115,7 +116,7 @@ export async function POST(req: Request) {
 
     if (!fs.existsSync(venvDir)) {
       pushLog("⚙ Creating .venv ...");
-      steps.push(() => spawn("python3", ["-m", "venv", ".venv"], { cwd: detectorDir }));
+      steps.push(() => spawn(systemPython, ["-m", "venv", ".venv"], { cwd: detectorDir }));
     }
 
     const runSteps = (idx: number) => {
@@ -160,7 +161,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "Setup already running" });
     }
     const detectorDir = path.join(process.cwd(), "detector");
-    const venvPip     = path.join(detectorDir, ".venv", "bin", "pip");
+    const venvPip     = venvBin(path.join(detectorDir, ".venv"), "pip");
     if (!fs.existsSync(venvPip)) {
       return NextResponse.json({ ok: false, error: "venv not found — run Setup first" });
     }

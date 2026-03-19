@@ -23,6 +23,7 @@ import base64
 import json
 import logging
 import math
+import sys
 import threading
 import time
 
@@ -288,6 +289,9 @@ def main():
     parser.add_argument("--thresh-warn",type=float, default=600.0, help="Distance (mm) level 0→1")
     parser.add_argument("--thresh-stop",type=float, default=300.0, help="Distance (mm) level 1→2")
     args = parser.parse_args()
+
+    if sys.platform == "win32":
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
     detector = MockDetector(args)
 

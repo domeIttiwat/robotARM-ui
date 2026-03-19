@@ -3,6 +3,7 @@ import type { ChildProcess } from "child_process";
 import path from "path";
 import fs from "fs";
 import net from "net";
+import { venvBin, systemPython } from "@/lib/venvPath";
 
 let simProc:     ChildProcess | null = null;
 let mockRosProc: ChildProcess | null = null;
@@ -48,8 +49,8 @@ export async function POST() {
   }
 
   // Start Python sim
-  const venvPy = path.join(cwd, "RobotArm_Project/venv/bin/python");
-  const pyBin  = fs.existsSync(venvPy) ? venvPy : "python3";
+  const venvPy = venvBin(path.join(cwd, "RobotArm_Project", "venv"), "python");
+  const pyBin  = fs.existsSync(venvPy) ? venvPy : systemPython;
   const script = path.join(cwd, "RobotArm_Project/main.py");
 
   simProc = spawn(pyBin, [script], { cwd, detached: false, stdio: "ignore" });
