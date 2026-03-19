@@ -810,7 +810,7 @@ function WristPanel({ wsUrl, camIndex, restartTrigger, enabled, onToggle }: {
         )}
 
         {/* Live Feed — main content */}
-        <div className="relative rounded-2xl overflow-hidden bg-black" style={{ aspectRatio: "16/10" }}>
+        <div className="relative rounded-2xl overflow-hidden bg-black" style={{ aspectRatio: "4/3" }}>
           <div className="absolute top-2 left-2 z-10 flex items-center gap-1.5 bg-black/65 backdrop-blur-sm px-2 py-0.5 rounded-full">
             <div className={`w-1.5 h-1.5 rounded-full ${enabled && connected ? "bg-indigo-400 animate-pulse" : "bg-gray-600"}`} />
             <span className="text-[9px] font-black text-white/85">WRIST CAM</span>
@@ -833,7 +833,7 @@ function WristPanel({ wsUrl, camIndex, restartTrigger, enabled, onToggle }: {
               <span className="text-[10px] text-gray-500">Camera Off</span>
             </div>
           ) : displayFrame ? (
-            <img src={`data:image/jpeg;base64,${displayFrame}`} alt="wrist" className="absolute inset-0 w-full h-full object-cover" />
+            <img src={`data:image/jpeg;base64,${displayFrame}`} alt="wrist" className="absolute inset-0 w-full h-full object-contain" />
           ) : connected ? (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5">
               <Camera size={28} className="text-gray-700 animate-pulse" />

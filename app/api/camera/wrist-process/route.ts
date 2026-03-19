@@ -8,6 +8,7 @@ import { NextResponse } from "next/server";
 import { spawn, ChildProcess } from "child_process";
 import path from "path";
 import fs from "fs";
+import net from "net";
 import { venvBin, systemPython } from "@/lib/venvPath";
 
 let proc: ChildProcess | null = null;
@@ -23,6 +24,16 @@ function pushLog(line: string) {
 function isRunning() {
   return proc !== null && proc.exitCode === null && !proc.killed;
 }
+
+function isPortFree(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const sock = net.createConnection({ host: "127.0.0.1", port });
+    sock.on("connect", () => { sock.destroy(); resolve(false); });
+    sock.on("error",   () => resolve(true));
+    setTimeout(() => { sock.destroy(); resolve(true); }, 300);
+  });
+}
+
 function isSetupRunning() {
   return setupProc !== null && setupProc.exitCode === null && !setupProc.killed;
 }
@@ -57,6 +68,14 @@ export async function POST(req: Request) {
       proc!.kill("SIGTERM");
       proc = null;
       await new Promise((r) => setTimeout(r, 600));
+    }
+
+    // Check if port 8766 is already occupied by an external process (e.g. mock_wrist.py)
+    const portFree = await isPortFree(8766);
+    if (!portFree && !isRunning()) {
+      pushLog("⚠ Port 8766 ถูกใช้งานโดย process อื่นอยู่แล้ว (เช่น mock_wrist.py)");
+      pushLog("  → หยุด process นั้นก่อน แล้วกด Start อีกครั้ง");
+      return NextResponse.json({ ok: false, error: "port_conflict", port: 8766 });
     }
 
     const wristDir   = path.join(process.cwd(), "wrist-cam");

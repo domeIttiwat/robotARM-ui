@@ -97,7 +97,7 @@ class CameraInterface(ABC):
 class OpenCVCamera(CameraInterface):
     """Standard RGB camera — no depth. Use as a starting point."""
 
-    def __init__(self, index: int = 2):
+    def __init__(self, index: int = 0):
         self._index = index
         self._cap: Optional[cv2.VideoCapture] = None
 
@@ -333,7 +333,7 @@ class WristCamService:
 
 def main():
     parser = argparse.ArgumentParser(description="Wrist camera service (RGB + optional Depth)")
-    parser.add_argument("--cam-index", type=int,   default=2,       help="Camera device index (default 2)")
+    parser.add_argument("--cam-index", type=int,   default=0,       help="Camera device index (default 0)")
     parser.add_argument("--ws-port",   type=int,   default=8766,    help="WebSocket port (default 8766)")
     parser.add_argument("--mode",      type=str,   default="rgb",   choices=["rgb", "depth"],
                         help="Initial display mode")
