@@ -740,10 +740,7 @@ function WristPanel({ wsUrl, camIndex, restartTrigger, enabled, onToggle }: {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
   }, [proc.logs]);
 
-  // Derive display frame — ignore stale frame if camera is not assigned
-  const displayFrame = camIndex >= 0
-    ? (viewMode === "depth" ? frame?.frame_depth : frame?.frame_rgb)
-    : null;
+  const displayFrame = viewMode === "depth" ? frame?.frame_depth : frame?.frame_rgb;
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -827,11 +824,6 @@ function WristPanel({ wsUrl, camIndex, restartTrigger, enabled, onToggle }: {
               <Camera size={28} className="text-gray-600 opacity-40" />
               <span className="text-[10px] text-gray-500">Camera Off</span>
             </div>
-          ) : camIndex < 0 ? (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5">
-              <Camera size={28} className="text-gray-700 opacity-30" />
-              <span className="text-[10px] text-gray-600">ไม่ได้ assign</span>
-            </div>
           ) : displayFrame ? (
             <img src={`data:image/jpeg;base64,${displayFrame}`} alt="wrist" className="absolute inset-0 w-full h-full object-cover" />
           ) : connected ? (
@@ -843,6 +835,7 @@ function WristPanel({ wsUrl, camIndex, restartTrigger, enabled, onToggle }: {
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
               <WifiOff size={28} className="text-gray-700" />
               <p className="text-gray-600 text-xs">Wrist cam ออฟไลน์</p>
+              {camIndex < 0 && <p className="text-gray-600 text-[10px]">ยังไม่ได้ assign camera index</p>}
             </div>
           )}
         </div>
