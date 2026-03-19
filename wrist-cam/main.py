@@ -39,6 +39,7 @@ import asyncio
 import base64
 import json
 import logging
+import sys
 import threading
 import time
 from abc import ABC, abstractmethod
