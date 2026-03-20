@@ -4,10 +4,11 @@
  */
 
 export interface JetsonConfig {
-  ip:         string;   // hostname / IP, e.g. "192.168.1.50" or "localhost"
-  rosPort:    number;   // rosbridge port  (default 9090)
-  safetyPort: number;   // safety detector (default 8765)
-  wristPort:  number;   // wrist camera    (default 8766)
+  ip:           string;   // hostname / IP, e.g. "192.168.1.50" or "localhost"
+  rosPort:      number;   // rosbridge port  (default 9090)
+  safetyPort:   number;   // safety detector (default 8765)
+  wristPort:    number;   // wrist camera    (default 8766)
+  skeletonPort: number;   // skeleton keypoints (default 8767)
 }
 
 const LS_KEY = "jetson_config";
@@ -20,14 +21,16 @@ function extractPort(wsUrl: string, fallback: number): number {
 }
 
 function envDefaults(): JetsonConfig {
-  const rosUrl    = process.env.NEXT_PUBLIC_ROS_URL         ?? "ws://localhost:9090";
-  const safetyUrl = process.env.NEXT_PUBLIC_SAFETY_WS_URL   ?? "ws://localhost:8765";
-  const wristUrl  = process.env.NEXT_PUBLIC_WRIST_WS_URL    ?? "ws://localhost:8766";
+  const rosUrl      = process.env.NEXT_PUBLIC_ROS_URL          ?? "ws://localhost:9090";
+  const safetyUrl   = process.env.NEXT_PUBLIC_SAFETY_WS_URL    ?? "ws://localhost:8765";
+  const wristUrl    = process.env.NEXT_PUBLIC_WRIST_WS_URL     ?? "ws://localhost:8766";
+  const skeletonUrl = process.env.NEXT_PUBLIC_SKELETON_WS_URL  ?? "ws://localhost:8767";
   return {
-    ip:         extractHost(rosUrl),
-    rosPort:    extractPort(rosUrl,    9090),
-    safetyPort: extractPort(safetyUrl, 8765),
-    wristPort:  extractPort(wristUrl,  8766),
+    ip:           extractHost(rosUrl),
+    rosPort:      extractPort(rosUrl,      9090),
+    safetyPort:   extractPort(safetyUrl,   8765),
+    wristPort:    extractPort(wristUrl,    8766),
+    skeletonPort: extractPort(skeletonUrl, 8767),
   };
 }
 

@@ -9,8 +9,11 @@ import { GTAOPass }       from "three/examples/jsm/postprocessing/GTAOPass.js";
 import { AfterimagePass } from "three/examples/jsm/postprocessing/AfterimagePass.js";
 import { OutputPass }     from "three/examples/jsm/postprocessing/OutputPass.js";
 import * as THREE from "three";
-import { Sparkle, Zap, RotateCcw } from "lucide-react";
+import { Sparkle, Zap, RotateCcw, ShieldAlert, ShieldOff } from "lucide-react";
 import { useViewerSettings, DEFAULT_SETTINGS, ViewerSettings } from "@/hooks/useViewerSettings";
+import { useSkeletonData } from "@/hooks/useSkeletonData";
+import SkeletonOverlay3D from "@/components/SkeletonOverlay3D";
+import { loadJetsonConfig, makeWsUrl } from "@/lib/jetsonConfig";
 
 const MODEL_URL   = "/models/RobotArm2.glb";
 const QUALITY_KEY = "robotViewerQuality";
@@ -288,6 +291,8 @@ export interface RobotViewer3DProps {
   settingsOverride?: ViewerSettings;
   /** Called once (and on model reload) with the list of material names found in the GLB */
   onMaterialsDiscovered?: (names: string[]) => void;
+  /** Called when safety zone level changes: 0=safe, 1=warn(slow), 2=stop */
+  onSafetyLevelChange?: (level: 0 | 1 | 2) => void;
 }
 
 export default function RobotViewer3D({
@@ -298,8 +303,9 @@ export default function RobotViewer3D({
   tcpFlips  = { x: false, y: false, z: false },
   settingsOverride,
   onMaterialsDiscovered,
+  onSafetyLevelChange,
 }: RobotViewer3DProps) {
-  const { settings: storedSettings } = useViewerSettings();
+  const { settings: storedSettings, update: updateSettings } = useViewerSettings();
 
   const [hq, setHq] = useState<boolean>(() => {
     if (typeof window === "undefined") return true;
@@ -310,6 +316,28 @@ export default function RobotViewer3D({
 
   const isHQ = settingsOverride != null || hq;
   const s    = settingsOverride ?? storedSettings;
+
+  // ── Skeleton / collision ─────────────────────────────────────────────────
+  const [skeletonWsUrl] = useState(() => {
+    const cfg = loadJetsonConfig();
+    return makeWsUrl(cfg.ip, cfg.skeletonPort);
+  });
+
+  const skeletonEnabled  = s.skeletonVisible  ?? DEFAULT_SETTINGS.skeletonVisible;
+  const skeletonMockMode = s.skeletonMockMode ?? DEFAULT_SETTINGS.skeletonMockMode;
+
+  const { persons } = useSkeletonData({
+    wsUrl:    skeletonWsUrl,
+    // Always try to connect to WS (or use mock); visibility is controlled by props
+    enabled:  !skeletonMockMode,
+    mockMode: skeletonMockMode,
+    mockX:    s.skeletonMockX ?? DEFAULT_SETTINGS.skeletonMockX,
+    mockZ:    s.skeletonMockZ ?? DEFAULT_SETTINGS.skeletonMockZ,
+  });
+
+  const capsuleRadiusWarn = s.capsuleRadiusWarn ?? DEFAULT_SETTINGS.capsuleRadiusWarn;
+  const capsuleRadiusStop = s.capsuleRadiusStop ?? DEFAULT_SETTINGS.capsuleRadiusStop;
+  const capsulesVisible   = s.capsulesVisible   ?? DEFAULT_SETTINGS.capsulesVisible;
 
   const toggleHq = () => {
     setHq((prev) => {
@@ -330,6 +358,18 @@ export default function RobotViewer3D({
             className="pointer-events-auto flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-white/10 hover:bg-white/20 text-white backdrop-blur-sm transition-colors"
           >
             <RotateCcw size={12} /> Reset View
+          </button>
+          {/* Capsule zones toggle */}
+          <button
+            onClick={() => updateSettings({ capsulesVisible: !storedSettings.capsulesVisible })}
+            className={`pointer-events-auto flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold backdrop-blur-sm transition-colors ${
+              storedSettings.capsulesVisible
+                ? "bg-cyan-400/20 hover:bg-cyan-400/30 text-cyan-300"
+                : "bg-white/10 hover:bg-white/20 text-white/50"
+            }`}
+          >
+            {storedSettings.capsulesVisible ? <ShieldAlert size={12} /> : <ShieldOff size={12} />}
+            Zones
           </button>
           <button
             onClick={toggleHq}
@@ -400,6 +440,16 @@ export default function RobotViewer3D({
           )}
 
           <TCPAxes tcpOffset={tcpOffset} tcpFlips={tcpFlips} />
+
+          {/* Always render SkeletonOverlay3D — visibility controlled via props independently */}
+          <SkeletonOverlay3D
+            persons={persons}
+            capsuleRadiusWarn={capsuleRadiusWarn}
+            capsuleRadiusStop={capsuleRadiusStop}
+            capsulesVisible={capsulesVisible}
+            skeletonVisible={skeletonEnabled}
+            onSafetyLevelChange={onSafetyLevelChange}
+          />
         </Suspense>
 
         <ExposureController exposure={isHQ ? Math.pow(2, s.exposure) : 1.0} />

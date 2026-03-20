@@ -150,6 +150,7 @@ function ConnectionBar({ config, onApply }: { config: JetsonConfig; onApply: (c:
       rosPort: rosPort || 9090,
       safetyPort: safetyPort || 8765,
       wristPort: wristPort || 8766,
+      skeletonPort: config.skeletonPort || 8767,
     };
     onApply(c);
     setApplied(true);
@@ -1061,7 +1062,7 @@ function CameraAssignBar({
 
 export default function CameraSetupPage() {
   // Use safe SSR defaults first, then load localStorage after hydration
-  const [config, setConfig]              = useState<JetsonConfig>({ ip: "localhost", rosPort: 9090, safetyPort: 8765, wristPort: 8766 });
+  const [config, setConfig]              = useState<JetsonConfig>({ ip: "localhost", rosPort: 9090, safetyPort: 8765, wristPort: 8766, skeletonPort: 8767 });
   const [camCfg, setCamCfg]              = useState<CameraConfig>({ safetyLeft: -1, safetyRight: -1, wrist: -1, safetyEnabled: false, wristEnabled: false });
   const [safetyRestart, setSafetyRestart] = useState(0);
   const [wristRestart,  setWristRestart]  = useState(0);

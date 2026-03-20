@@ -54,6 +54,7 @@ interface RosContextType {
   setCurrentTaskIndex: (index: number) => void;
   isTestMode: boolean;
   setTestMode: (v: boolean) => void;
+  publishSafetyLevel: (level: 0 | 1 | 2) => void;
   calibration: CalibrationData;
   setCalibration: (data: CalibrationData) => void;
   effectiveTcpOffset: { x: number; y: number; z: number };
@@ -366,6 +367,17 @@ export const RosProvider = ({ children }: { children: React.ReactNode }) => {
     setCurrentTaskIndex(0);
   }, []);
 
+  // Publish safety level from UI skeleton detection (0=safe, 1=warn/slow, 2=stop)
+  const publishSafetyLevel = useCallback((level: 0 | 1 | 2) => {
+    if (!ros) return;
+    const topic = new ROSLIB.Topic({
+      ros,
+      name: "/safety_status",
+      messageType: "std_msgs/Int8",
+    });
+    topic.publish({ data: level });
+  }, [ros]);
+
   const updateCurrentTaskIndex = useCallback((index: number) => {
     setCurrentTaskIndex(index);
   }, []);
@@ -397,6 +409,7 @@ export const RosProvider = ({ children }: { children: React.ReactNode }) => {
         setCurrentTaskIndex: updateCurrentTaskIndex,
         isTestMode,
         setTestMode: setIsTestMode,
+        publishSafetyLevel,
         calibration,
         setCalibration,
         effectiveTcpOffset,

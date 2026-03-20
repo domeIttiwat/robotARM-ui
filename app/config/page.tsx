@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useState, useEffect, useCallback } from "react";
-import { ArrowLeft, FlipHorizontal2, RotateCcw, Play, Square } from "lucide-react";
+import { ArrowLeft, FlipHorizontal2, RotateCcw, Play, Square, ShieldAlert } from "lucide-react";
 import { useViewerFlips } from "@/hooks/useViewerFlips";
 import { useViewerSettings, DEFAULT_SETTINGS, ViewerSettings } from "@/hooks/useViewerSettings";
 import { useRos } from "@/context/RosContext";
@@ -145,7 +145,7 @@ function TCPAxisRow({
 // ── Page component ────────────────────────────────────────────────────────────
 export default function ConfigPage() {
   const router = useRouter();
-  const { jointStates, calibration, setCalibration, effectiveTcpOffset } = useRos();
+  const { jointStates, calibration, setCalibration, effectiveTcpOffset, publishSafetyLevel } = useRos();
   const { flips, toggleFlip } = useViewerFlips();
   const { settings, update, reset } = useViewerSettings();
 
@@ -586,6 +586,83 @@ export default function ConfigPage() {
             </div>
           </Section>
 
+          {/* ── Collision Detection ────────────────────────────────────── */}
+          <Section title="Collision Detection">
+            <div className="flex items-center gap-2 -mt-3 mb-1">
+              <ShieldAlert size={13} className="text-cyan-500" />
+              <p className="text-xs text-gray-400 dark:text-[#8090b8]">
+                แคปซูลและ skeleton ตรวจจับคนเข้าใกล้หุ่น
+              </p>
+            </div>
+
+            <Toggle
+              label="แสดงแคปซูล (Capsules)"
+              value={settings.capsulesVisible ?? DEFAULT_SETTINGS.capsulesVisible}
+              onChange={(v) => update({ capsulesVisible: v })}
+            />
+            <Toggle
+              label="แสดง Skeleton"
+              value={settings.skeletonVisible ?? DEFAULT_SETTINGS.skeletonVisible}
+              onChange={(v) => update({ skeletonVisible: v })}
+            />
+
+            {/* Mock mode */}
+            <Toggle
+              label="Test Mode (Mock Skeleton)"
+              value={settings.skeletonMockMode ?? DEFAULT_SETTINGS.skeletonMockMode}
+              onChange={(v) => update({ skeletonMockMode: v })}
+            />
+
+            {(settings.skeletonMockMode ?? DEFAULT_SETTINGS.skeletonMockMode) && (
+              <div className="space-y-4 p-3 bg-cyan-50 dark:bg-cyan-900/20 rounded-2xl border border-cyan-200 dark:border-cyan-500/20">
+                <p className="text-[10px] font-bold text-cyan-600 dark:text-cyan-400 uppercase tracking-wider">
+                  Mock Position — เลื่อนตำแหน่งคนจำลองใน 3D
+                </p>
+                <Slider
+                  label="ตำแหน่ง X (ซ้าย-ขวา)"
+                  value={settings.skeletonMockX ?? DEFAULT_SETTINGS.skeletonMockX}
+                  min={-2} max={2} step={0.01} unit="m" decimals={2}
+                  onChange={(v) => update({ skeletonMockX: v })}
+                />
+                <Slider
+                  label="ตำแหน่ง Z (หน้า-หลัง)"
+                  value={settings.skeletonMockZ ?? DEFAULT_SETTINGS.skeletonMockZ}
+                  min={-2} max={2} step={0.01} unit="m" decimals={2}
+                  onChange={(v) => update({ skeletonMockZ: v })}
+                />
+              </div>
+            )}
+
+            {/* Two-zone capsule radii */}
+            <div className="space-y-5 p-3.5 bg-amber-50 dark:bg-amber-900/15 rounded-2xl border border-amber-200 dark:border-amber-500/20">
+              <p className="text-[10px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />
+                Zone ใกล้ — หุ่นช้าลง (Warn)
+              </p>
+              <Slider
+                label="รัศมี Warn zone"
+                value={settings.capsuleRadiusWarn ?? DEFAULT_SETTINGS.capsuleRadiusWarn}
+                min={0.10} max={0.80} step={0.01} unit="m" decimals={2}
+                onChange={(v) => update({ capsuleRadiusWarn: v })}
+              />
+            </div>
+            <div className="space-y-5 p-3.5 bg-red-50 dark:bg-red-900/15 rounded-2xl border border-red-200 dark:border-red-500/20">
+              <p className="text-[10px] font-black text-red-500 dark:text-red-400 uppercase tracking-wider flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-red-500 inline-block" />
+                Zone ใกล้มาก — หุ่นหยุด (Stop)
+              </p>
+              <Slider
+                label="รัศมี Stop zone"
+                value={settings.capsuleRadiusStop ?? DEFAULT_SETTINGS.capsuleRadiusStop}
+                min={0.05} max={0.50} step={0.01} unit="m" decimals={2}
+                onChange={(v) => update({ capsuleRadiusStop: v })}
+              />
+            </div>
+            <p className="text-[10px] text-gray-400 dark:text-[#6878a8]">
+              Stop zone ต้องน้อยกว่า Warn zone เสมอ
+            </p>
+          </Section>
+
         </div>
 
         {/* Right: live 3D preview + TCP offset panel */}
@@ -597,6 +674,7 @@ export default function ConfigPage() {
             tcpFlips={calibration.tcpFlips}
             settingsOverride={settings}
             onMaterialsDiscovered={handleMaterialsDiscovered}
+            onSafetyLevelChange={publishSafetyLevel}
           />
 
           {/* ── TCP Offset panel ─── */}

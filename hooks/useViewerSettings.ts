@@ -28,6 +28,14 @@ export interface ViewerSettings {
   aoIntensity: number;          // 0-1
   motionBlurEnabled: boolean;   // HQ only — afterimage motion blur
   motionBlurStrength: number;   // 0-0.98 (AfterimagePass damp value)
+  // ── Collision / skeleton settings ────────────────────────────────────────
+  capsulesVisible: boolean;      // show glow capsules around robot segments
+  capsuleRadiusWarn: number;    // outer warn-zone radius (m) — robot slows
+  capsuleRadiusStop: number;    // inner stop-zone radius (m) — robot stops
+  skeletonVisible: boolean;     // show human body glow overlay in 3D
+  skeletonMockMode: boolean;    // use generated mock skeleton (no real WS data needed)
+  skeletonMockX: number;        // mock person X position in meters
+  skeletonMockZ: number;        // mock person Z position in meters
 }
 
 export const DEFAULT_SETTINGS: ViewerSettings = {
@@ -54,6 +62,14 @@ export const DEFAULT_SETTINGS: ViewerSettings = {
   aoIntensity: 0.5,
   motionBlurEnabled: false,
   motionBlurStrength: 0.7,
+  // Collision / skeleton defaults
+  capsulesVisible:    true,
+  capsuleRadiusWarn:  0.35,
+  capsuleRadiusStop:  0.18,
+  skeletonVisible:   true,
+  skeletonMockMode:  false,
+  skeletonMockX:     0.6,
+  skeletonMockZ:     0.6,
 };
 
 function load(): ViewerSettings {
