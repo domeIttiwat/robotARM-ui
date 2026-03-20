@@ -374,10 +374,13 @@ function SafetyPanel({ wsUrl, camLeft, camRight, restartTrigger, enabled, onTogg
   const [calLoading, setCalLoading] = useState(false);
   const [proc, setProc]             = useState<ProcStatus>({ running: false, pid: null, setupRunning: false, venvReady: false, logs: [] });
   const [procLoading, setProcLoading] = useState(false);
+  const [skelProc, setSkelProc]     = useState<ProcStatus>({ running: false, pid: null, setupRunning: false, venvReady: false, logs: [] });
+  const [skelLoading, setSkelLoading] = useState(false);
   const [copied, setCopied]         = useState<string | null>(null);
   const [fps, setFps]               = useState<number | null>(null);
   const wsRef       = useRef<WebSocket | null>(null);
   const logRef      = useRef<HTMLDivElement>(null);
+  const skelLogRef  = useRef<HTMLDivElement>(null);
   const frameCount  = useRef(0);
 
   // FPS counter — tick every second
@@ -420,6 +423,21 @@ function SafetyPanel({ wsUrl, camLeft, camRight, restartTrigger, enabled, onTogg
   }, []);
   useEffect(() => { refreshProc(); const t = setInterval(refreshProc, 2000); return () => clearInterval(t); }, [refreshProc]);
 
+  const refreshSkelProc = useCallback(() => {
+    fetch("/api/camera/skeleton-process").then((r) => r.json()).then(setSkelProc).catch(() => {});
+  }, []);
+  useEffect(() => { refreshSkelProc(); const t = setInterval(refreshSkelProc, 2000); return () => clearInterval(t); }, [refreshSkelProc]);
+
+  const skelAction = async (action: "start" | "stop" | "restart" | "setup") => {
+    setSkelLoading(true);
+    const body: Record<string, unknown> = { action };
+    if ((action === "start" || action === "restart") && camLeft >= 0) body.camIndex = camLeft;
+    await fetch("/api/camera/skeleton-process", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).catch(() => {});
+    await new Promise((r) => setTimeout(r, 800));
+    refreshSkelProc();
+    setSkelLoading(false);
+  };
+
   const procAction = async (action: "start" | "stop" | "restart" | "setup") => {
     setProcLoading(true);
     const body: Record<string, unknown> = { action };
@@ -460,6 +478,10 @@ function SafetyPanel({ wsUrl, camLeft, camRight, restartTrigger, enabled, onTogg
   useEffect(() => {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
   }, [proc.logs]);
+
+  useEffect(() => {
+    if (skelLogRef.current) skelLogRef.current.scrollTop = skelLogRef.current.scrollHeight;
+  }, [skelProc.logs]);
 
   // Clear stale frame when both cameras are unassigned
   useEffect(() => { if (camLeft < 0 && camRight < 0) setFrame(null); }, [camLeft, camRight]);
@@ -605,6 +627,68 @@ function SafetyPanel({ wsUrl, camLeft, camRight, restartTrigger, enabled, onTogg
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-600 shrink-0" /> &lt;{threshStop} mm = หยุด</span>
           </div>
         </div>
+
+        {/* Skeleton Pose Service */}
+        <SectionCard title="Skeleton Pose Service (port 8767)" icon={<Scan size={13} />} collapsible defaultOpen={false}>
+          <div className="space-y-3">
+            <p className="text-[10px] text-gray-400 leading-relaxed">
+              รัน <code className="font-mono text-violet-500">detector/skeleton_service.py</code> — ส่ง MediaPipe Pose keypoints
+              ไป UI ผ่าน WebSocket <code className="font-mono">:8767</code>
+            </p>
+
+            {/* Status + buttons */}
+            <div className="flex items-center gap-2">
+              <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${
+                skelProc.running ? "bg-green-500 animate-pulse"
+                : skelProc.setupRunning ? "bg-blue-500 animate-pulse"
+                : "bg-gray-300 dark:bg-gray-600"
+              }`} />
+              <span className="text-xs font-bold text-gray-500">
+                {skelProc.running ? `PID ${skelProc.pid}` : "หยุดอยู่"}
+              </span>
+              <div className="ml-auto flex items-center gap-2">
+                {!skelProc.running ? (
+                  <button
+                    onClick={() => skelAction("start")} disabled={skelLoading || skelProc.setupRunning}
+                    className="h-8 px-3 rounded-xl bg-violet-500 hover:bg-violet-600 text-white text-xs font-black disabled:opacity-50 flex items-center gap-1.5 transition-colors"
+                  >
+                    <Play size={12} /> Start
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => skelAction("restart")} disabled={skelLoading}
+                      className="h-8 px-3 rounded-xl bg-orange-100 dark:bg-orange-900/30 hover:bg-orange-200 text-orange-700 text-xs font-black disabled:opacity-50 flex items-center gap-1.5 transition-colors"
+                    >
+                      <RotateCcw size={11} /> Restart
+                    </button>
+                    <button
+                      onClick={() => skelAction("stop")} disabled={skelLoading}
+                      className="h-8 px-3 rounded-xl bg-red-100 dark:bg-red-900/30 hover:bg-red-200 text-red-700 text-xs font-black disabled:opacity-50 flex items-center gap-1.5 transition-colors"
+                    >
+                      <Square size={11} /> Stop
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Logs */}
+            {skelProc.logs.length > 0 && (
+              <div ref={skelLogRef} className="h-24 overflow-y-auto bg-gray-900 dark:bg-black/60 rounded-xl px-3 py-2 space-y-0.5">
+                {skelProc.logs.slice(-40).map((line, i) => (
+                  <p key={i} className={`text-[10px] font-mono leading-relaxed ${
+                    line.includes("ERROR") ? "text-red-400" : line.includes("WARN") ? "text-yellow-400" : "text-gray-500"
+                  }`}>{line}</p>
+                ))}
+              </div>
+            )}
+
+            <p className="text-[10px] font-black text-gray-400 uppercase">รันด้วยตัวเอง</p>
+            <CmdLine cmd="cd detector && python skeleton_service.py" copied={copied} onCopy={copyCmd} />
+            <CmdLine cmd="cd detector && pip install mediapipe"       copied={copied} onCopy={copyCmd} />
+          </div>
+        </SectionCard>
 
         {/* Calibration (collapsible) */}
         <SectionCard title="Calibration — Safety Cameras" icon={<Crosshair size={13} />} collapsible defaultOpen={false}>

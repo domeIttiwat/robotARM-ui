@@ -3,3 +3,4 @@ opencv-python     # กล้อง + วาด bbox
 websockets>=12.0  # stream ภาพ + event ไป browser (v12+ รองรับ Windows asyncio)
 roslibpy          # คุย ROS bridge ws://localhost:9090 (optional — graceful fallback if missing)
 numpy
+mediapipe         # skeleton_service.py — MediaPipe Pose keypoint detection

@@ -931,14 +931,21 @@ export default function JobEditor({
       {/* Task JSON Preview Modal */}
       {taskJsonIdx !== null && tasks[taskJsonIdx] && (() => {
         const t = tasks[taskJsonIdx];
+        const mode = t.controlMode ?? "joint";
         const payload = {
           sequence: taskJsonIdx + 1,
           label: t.label ?? `Task ${taskJsonIdx + 1}`,
+          controlMode: mode,
           j1: t.j1, j2: t.j2, j3: t.j3,
           j4: t.j4, j5: t.j5, j6: t.j6,
           rail: t.rail,
           speed: t.speed ?? 50,
+          delay: t.delay ?? 0,
           gripper: t.gripper ?? 0,
+          ...(mode === "effector" && t.x != null && {
+            x: t.x, y: t.y, z: t.z,
+            roll: t.roll, pitch: t.pitch, yaw: t.yaw,
+          }),
         };
         const jsonStr = JSON.stringify(payload, null, 2);
         const handleCopy = async () => {

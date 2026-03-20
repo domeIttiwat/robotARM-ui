@@ -271,20 +271,29 @@ export default function JobDetailView({ job, onBack, onUpdate, autoStart = false
     taskRefs.current[currentIdx]?.scrollIntoView({ behavior: "smooth", block: "center" });
   }, [currentIdx, isExecuting]);
 
-  // ── JSON preview payload (same structure sent to /execute_trajectory)
+  // ── JSON preview payload (same structure sent per-task to /goto_position)
   const rosPayload = useMemo(() => ({
     id: job.id,
     name: job.name,
-    tasks: tasks.map((t) => ({
-      sequence: t.sequence,
-      label: t.label ?? `Task ${t.sequence}`,
-      j1: t.j1, j2: t.j2, j3: t.j3,
-      j4: t.j4, j5: t.j5, j6: t.j6,
-      rail: t.rail,
-      speed: t.speed ?? 50,
-      delay: t.delay ?? 0,
-      gripper: t.gripper ?? 0,
-    })),
+    tasks: tasks.map((t) => {
+      const mode = t.controlMode ?? "joint";
+      return {
+        sequence: t.sequence,
+        label: t.label ?? `Task ${t.sequence}`,
+        controlMode: mode,
+        j1: t.j1, j2: t.j2, j3: t.j3,
+        j4: t.j4, j5: t.j5, j6: t.j6,
+        rail: t.rail,
+        speed: t.speed ?? 50,
+        delay: t.delay ?? 0,
+        gripper: t.gripper ?? 0,
+        // Cartesian target — only present when controlMode === "effector"
+        ...(mode === "effector" && t.x != null && {
+          x: t.x, y: t.y, z: t.z,
+          roll: t.roll, pitch: t.pitch, yaw: t.yaw,
+        }),
+      };
+    }),
   }), [job.id, job.name, tasks]);
 
   const copyJson = async () => {
@@ -978,7 +987,7 @@ export default function JobDetailView({ job, onBack, onUpdate, autoStart = false
               <div className="flex items-center gap-3">
                 <FileJson size={18} className="text-purple-400" />
                 <div>
-                  <p className="text-white font-black text-sm">/execute_trajectory payload</p>
+                  <p className="text-white font-black text-sm">/goto_position payload (per task)</p>
                   <p className="text-white/40 text-xs">std_msgs/String → JSON.stringify()</p>
                 </div>
               </div>
@@ -1013,7 +1022,7 @@ export default function JobDetailView({ job, onBack, onUpdate, autoStart = false
 
             {/* Footer */}
             <div className="px-6 py-3 border-t border-white/10 flex items-center justify-between">
-              <span className="text-white/30 text-xs">{tasks.length} tasks · topic: /execute_trajectory</span>
+              <span className="text-white/30 text-xs">{tasks.length} tasks · ส่งทีละ task ผ่าน /goto_position</span>
               <span className="text-white/30 text-xs">{JSON.stringify(rosPayload).length} bytes</span>
             </div>
           </div>
