@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { spawnSync } from "child_process";
+import { systemPython } from "@/lib/venvPath";
 
 const SNAPSHOT_SCRIPT = `
 import cv2, base64, sys
@@ -17,13 +18,13 @@ else:
 export async function GET(req: NextRequest) {
   const index = req.nextUrl.searchParams.get("index") ?? "0";
 
-  const result = spawnSync("python3", ["-c", SNAPSHOT_SCRIPT, index], {
+  const result = spawnSync(systemPython, ["-c", SNAPSHOT_SCRIPT, index], {
     timeout: 10000,
     encoding: "utf8",
   });
 
   if (result.error) {
-    return NextResponse.json({ error: `python3 not found: ${result.error.message}` }, { status: 500 });
+    return NextResponse.json({ error: `${systemPython} not found: ${result.error.message}` }, { status: 500 });
   }
   if (result.status !== 0) {
     return NextResponse.json(
