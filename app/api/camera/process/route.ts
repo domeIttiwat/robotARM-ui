@@ -40,7 +40,13 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const { action, camLeft, camRight } = await req.json();
+  let body: { action?: string; camLeft?: unknown; camRight?: unknown };
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ ok: false, error: "Invalid JSON body" }, { status: 400 });
+  }
+  const { action, camLeft, camRight } = body;
 
   // ── stop ─────────────────────────────────────────────────────────────────
   if (action === "stop") {
