@@ -398,7 +398,7 @@ export default function JobEditor({
   onSave,
   onCancel,
 }: JobEditorProps) {
-  const { jointStates, railPos, gripperPos, effectorPose, setTeachMode, sendGotoPosition, calibration, effectiveTcpOffset } =
+  const { isConnected, jointStates, railPos, gripperPos, effectorPose, setTeachMode, sendGotoPosition, calibration, effectiveTcpOffset } =
     useRos();
   const [jobName, setJobName] = useState(job?.name || "");
   const [jobDescription, setJobDescription] = useState(job?.description || "");
@@ -528,6 +528,10 @@ export default function JobEditor({
   };
 
   const testTask = (index: number) => {
+    if (!isConnected) {
+      alert("กรุณาเชื่อมต่อ ROS ก่อนทดสอบ Task");
+      return;
+    }
     const task = tasks[index];
     setTeachMode(false);
     sendGotoPosition({

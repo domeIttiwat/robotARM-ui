@@ -63,7 +63,10 @@ interface RosContextType {
 const RosContext = createContext<RosContextType | null>(null);
 
 export const RosProvider = ({ children }: { children: React.ReactNode }) => {
-  const [ros, setRos] = useState<ROSLIB.Ros | null>(null);
+  // Use refs so callbacks always read the latest instance without stale closures
+  const rosRef = useRef<ROSLIB.Ros | null>(null);
+  const isConnectedRef = useRef(false);
+
   const [isConnected, setIsConnected] = useState(false);
   const [jointStates, setJointStates] = useState([0, 0, 0, 0, 0, 0]);
   const [jointVelocities, setJointVelocities] = useState([0, 0, 0, 0, 0, 0]);
@@ -124,13 +127,21 @@ export const RosProvider = ({ children }: { children: React.ReactNode }) => {
       });
 
       rosInstance.on("connection", () => {
-        console.log("ROS Bridge Connected");
+        console.log("[ROS] Bridge connected");
+        rosRef.current = rosInstance;
+        isConnectedRef.current = true;
         setIsConnected(true);
       });
 
-      rosInstance.on("error", () => setIsConnected(false));
+      rosInstance.on("error", () => {
+        console.warn("[ROS] Bridge error");
+        isConnectedRef.current = false;
+        setIsConnected(false);
+      });
 
       rosInstance.on("close", () => {
+        console.warn("[ROS] Bridge closed — reconnecting in 5s");
+        isConnectedRef.current = false;
         setIsConnected(false);
         setTimeout(connectRos, 5000);
       });
@@ -209,11 +220,12 @@ export const RosProvider = ({ children }: { children: React.ReactNode }) => {
       });
       machineStateSub.subscribe((m: any) => setMachineState(m.data));
 
-      setRos(rosInstance);
+      // Store instance in ref (ros is live from this point; isConnectedRef becomes true on "connection")
+      rosRef.current = rosInstance;
     };
 
     connectRos();
-    return () => ros?.close();
+    return () => rosRef.current?.close();
   }, []);
 
   // Effective TCP offset after applying per-axis flip signs
@@ -223,24 +235,30 @@ export const RosProvider = ({ children }: { children: React.ReactNode }) => {
     z: (calibration.tcpFlips?.z ? -1 : 1) * calibration.tcpOffset.z,
   };
 
-  // Publish /tool_config whenever TCP offset changes (raw value, no flip — flip is UI-only)
+  // Publish /tool_config whenever TCP offset changes or connection is established
   useEffect(() => {
-    if (!ros) return;
-    const topic = new ROSLIB.Topic({
-      ros,
-      name: "/tool_config",
-      messageType: "std_msgs/String",
-    });
-    topic.publish({ data: JSON.stringify({
+    if (!rosRef.current || !isConnected) return;
+    const payload = {
       tcp_x: calibration.tcpOffset.x,
       tcp_y: calibration.tcpOffset.y,
       tcp_z: calibration.tcpOffset.z,
-    }) });
-  }, [calibration.tcpOffset, ros]);
+    };
+    console.log("[ROS] publish /tool_config", payload);
+    const topic = new ROSLIB.Topic({
+      ros: rosRef.current,
+      name: "/tool_config",
+      messageType: "std_msgs/String",
+    });
+    topic.publish({ data: JSON.stringify(payload) });
+    console.log("[ROS] publish /tool_config done");
+  }, [calibration.tcpOffset, isConnected]);
 
   const sendJob = useCallback(
     (jobData: any) => {
-      if (!ros) return;
+      if (!rosRef.current || !isConnectedRef.current) {
+        console.warn("[ROS] sendJob skipped — not connected");
+        return;
+      }
       const rawTasks = jobData.tasks?.map((task: any) => ({
         ...task,
         j1: applyInverse(task.j1, 0),
@@ -252,19 +270,25 @@ export const RosProvider = ({ children }: { children: React.ReactNode }) => {
         rail: applyInverse(task.rail, 6),
         gripper: applyInverse(task.gripper, 7),
       }));
+      const payload = { ...jobData, tasks: rawTasks };
+      console.log("[ROS] publish /execute_trajectory", payload);
       const topic = new ROSLIB.Topic({
-        ros,
+        ros: rosRef.current,
         name: "/execute_trajectory",
         messageType: "std_msgs/String",
       });
-      topic.publish({ data: JSON.stringify({ ...jobData, tasks: rawTasks }) });
+      topic.publish({ data: JSON.stringify(payload) });
+      console.log("[ROS] publish /execute_trajectory done");
     },
-    [ros, applyInverse]
+    [applyInverse]
   );
 
   const sendGotoPosition = useCallback(
     (taskData: any) => {
-      if (!ros) return;
+      if (!rosRef.current || !isConnectedRef.current) {
+        console.warn("[ROS] sendGotoPosition skipped — not connected");
+        return;
+      }
       const cal = calibrationRef.current;
       const rawTask = {
         ...taskData,
@@ -286,80 +310,104 @@ export const RosProvider = ({ children }: { children: React.ReactNode }) => {
         tcp_y: cal.tcpOffset.y,
         tcp_z: cal.tcpOffset.z,
       };
+      console.log("[ROS] publish /goto_position", rawTask);
       const topic = new ROSLIB.Topic({
-        ros,
+        ros: rosRef.current,
         name: "/goto_position",
         messageType: "std_msgs/String",
       });
       topic.publish({ data: JSON.stringify(rawTask) });
+      console.log("[ROS] publish /goto_position done");
     },
-    [ros, applyInverse]
+    [applyInverse]
   );
 
   const sendJogCommand = useCallback(
     (cmd: any) => {
-      if (!ros) return;
+      if (!rosRef.current || !isConnectedRef.current) {
+        console.warn("[ROS] sendJogCommand skipped — not connected");
+        return;
+      }
+      console.log("[ROS] publish /goto_position (jog)", cmd);
       const topic = new ROSLIB.Topic({
-        ros,
+        ros: rosRef.current,
         name: "/goto_position",
         messageType: "std_msgs/String",
       });
       topic.publish({ data: JSON.stringify(cmd) });
+      console.log("[ROS] publish /goto_position (jog) done");
     },
-    [ros]
+    []
   );
 
   const setTeachMode = useCallback(
     (status: boolean) => {
-      if (!ros) return;
+      if (!rosRef.current || !isConnectedRef.current) {
+        console.warn("[ROS] setTeachMode skipped — not connected");
+        return;
+      }
+      console.log("[ROS] publish /teach_mode", status);
       const topic = new ROSLIB.Topic({
-        ros,
+        ros: rosRef.current,
         name: "/teach_mode",
         messageType: "std_msgs/Bool",
       });
       topic.publish({ data: status });
+      console.log("[ROS] publish /teach_mode done");
     },
-    [ros]
+    []
   );
 
   const stopExecution = useCallback(() => {
-    if (ros) {
+    if (rosRef.current && isConnectedRef.current) {
+      console.log("[ROS] publish /stop_execution true");
       const topic = new ROSLIB.Topic({
-        ros,
+        ros: rosRef.current,
         name: "/stop_execution",
         messageType: "std_msgs/Bool",
       });
       topic.publish({ data: true });
+      console.log("[ROS] publish /stop_execution done");
+    } else {
+      console.warn("[ROS] stopExecution skipped — not connected");
     }
     setIsExecuting(false);
     setIsPaused(false);
     setExecutionStartTime(null);
     setCurrentTaskIndex(0);
-  }, [ros]);
+  }, []);
 
   const pauseExecution = useCallback(() => {
-    if (ros) {
+    if (rosRef.current && isConnectedRef.current) {
+      console.log("[ROS] publish /pause_execution true");
       const topic = new ROSLIB.Topic({
-        ros,
+        ros: rosRef.current,
         name: "/pause_execution",
         messageType: "std_msgs/Bool",
       });
       topic.publish({ data: true });
+      console.log("[ROS] publish /pause_execution done");
+    } else {
+      console.warn("[ROS] pauseExecution skipped — not connected");
     }
     setIsPaused(true);
-  }, [ros]);
+  }, []);
 
   const resumeExecution = useCallback(() => {
-    if (ros) {
+    if (rosRef.current && isConnectedRef.current) {
+      console.log("[ROS] publish /pause_execution false (resume)");
       const topic = new ROSLIB.Topic({
-        ros,
+        ros: rosRef.current,
         name: "/pause_execution",
         messageType: "std_msgs/Bool",
       });
       topic.publish({ data: false });
+      console.log("[ROS] publish /pause_execution (resume) done");
+    } else {
+      console.warn("[ROS] resumeExecution skipped — not connected");
     }
     setIsPaused(false);
-  }, [ros]);
+  }, []);
 
   const startExecution = useCallback(() => {
     setIsExecuting(true);
@@ -369,14 +417,19 @@ export const RosProvider = ({ children }: { children: React.ReactNode }) => {
 
   // Publish safety level from UI skeleton detection (0=safe, 1=warn/slow, 2=stop)
   const publishSafetyLevel = useCallback((level: 0 | 1 | 2) => {
-    if (!ros) return;
+    if (!rosRef.current || !isConnectedRef.current) {
+      console.warn("[ROS] publishSafetyLevel skipped — not connected");
+      return;
+    }
+    console.log("[ROS] publish /safety_status", level);
     const topic = new ROSLIB.Topic({
-      ros,
+      ros: rosRef.current,
       name: "/safety_status",
       messageType: "std_msgs/Int8",
     });
     topic.publish({ data: level });
-  }, [ros]);
+    console.log("[ROS] publish /safety_status done");
+  }, []);
 
   const updateCurrentTaskIndex = useCallback((index: number) => {
     setCurrentTaskIndex(index);
