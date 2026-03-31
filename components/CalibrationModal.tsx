@@ -8,6 +8,7 @@ const DEFAULT_CALIBRATION: CalibrationData = {
   offsets: [0, 0, 0, 0, 0, 0, 0, 0],
   flips: [false, false, false, false, false, false, false, false],
   tcpOffset: { x: 0, y: 0, z: 0 },
+  tcpFlips: { x: false, y: false, z: false },
 };
 
 const AXES = [
@@ -29,6 +30,7 @@ export default function CalibrationModal({ onClose }: { onClose: () => void }) {
     offsets: [...calibration.offsets],
     flips: [...calibration.flips],
     tcpOffset: { ...calibration.tcpOffset },
+    tcpFlips: { ...calibration.tcpFlips },
   });
 
   const setOffset = (i: number, value: number) => {
@@ -57,6 +59,7 @@ export default function CalibrationModal({ onClose }: { onClose: () => void }) {
       offsets: [...DEFAULT_CALIBRATION.offsets],
       flips: [...DEFAULT_CALIBRATION.flips],
       tcpOffset: { x: 0, y: 0, z: 0 },
+      tcpFlips: { x: false, y: false, z: false },
     });
   };
 
