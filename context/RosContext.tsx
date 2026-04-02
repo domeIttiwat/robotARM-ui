@@ -38,6 +38,7 @@ interface RosContextType {
   safetyStatus: number;
   robotStatus: number;
   machineState: number;
+  gripperStatus: number;  // 0=empty, 1=holding, 2=error  (topic: /gripper_status, std_msgs/Int8)
   effectorPose: EffectorPose;
   sendJob: (jobData: any) => void;
   sendGotoPosition: (taskData: any) => void;
@@ -55,6 +56,7 @@ interface RosContextType {
   isTestMode: boolean;
   setTestMode: (v: boolean) => void;
   publishSafetyLevel: (level: 0 | 1 | 2) => void;
+  callGetPlanningModes: () => Promise<string[]>;
   calibration: CalibrationData;
   setCalibration: (data: CalibrationData) => void;
   effectiveTcpOffset: { x: number; y: number; z: number };
@@ -75,6 +77,7 @@ export const RosProvider = ({ children }: { children: React.ReactNode }) => {
   const [safetyStatus, setSafetyStatus] = useState(0);
   const [robotStatus, setRobotStatus] = useState(0);
   const [machineState, setMachineState] = useState(0);
+  const [gripperStatus, setGripperStatus] = useState(0);
   const [effectorPose, setEffectorPose] = useState<EffectorPose>({ x: 0, y: 0, z: 0, roll: 0, pitch: 0, yaw: 0 });
   const [isExecuting, setIsExecuting] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -219,6 +222,14 @@ export const RosProvider = ({ children }: { children: React.ReactNode }) => {
         messageType: "std_msgs/Int8",
       });
       machineStateSub.subscribe((m: any) => setMachineState(m.data));
+
+      // Gripper object detection status (0=empty, 1=holding, 2=error)
+      const gripperStatusSub = new ROSLIB.Topic({
+        ros: rosInstance,
+        name: "/gripper_status",
+        messageType: "std_msgs/Int8",
+      });
+      gripperStatusSub.subscribe((m: any) => setGripperStatus(m.data));
 
       // Store instance in ref (ros is live from this point; isConnectedRef becomes true on "connection")
       rosRef.current = rosInstance;
@@ -431,6 +442,59 @@ export const RosProvider = ({ children }: { children: React.ReactNode }) => {
     console.log("[ROS] publish /safety_status done");
   }, []);
 
+  // Call /planning/get_modes service (std_srvs/Trigger)
+  // Response: success=bool, message=JSON array string e.g. '["mode_a","mode_b"]'
+  const callGetPlanningModes = useCallback((): Promise<string[]> => {
+    return new Promise((resolve) => {
+      if (!rosRef.current || !isConnectedRef.current) {
+        console.warn("[ROS] callGetPlanningModes skipped — not connected");
+        resolve([]);
+        return;
+      }
+      const svc = new ROSLIB.Service({
+        ros: rosRef.current,
+        name: "/planning/get_modes",
+        serviceType: "std_srvs/Trigger",
+      });
+      svc.callService({} as any, (result: any) => {
+        try {
+          const modes = JSON.parse(result.message ?? "[]");
+          resolve(Array.isArray(modes) ? modes : []);
+        } catch {
+          resolve([]);
+        }
+      }, () => resolve([]));
+    });
+  }, []);
+
+  // Advertise /robot_ui/get_position service server
+  // Other systems request by name; we respond with position data from DB
+  useEffect(() => {
+    if (!isConnected || !rosRef.current) return;
+    const fetchAndAdvertise = async () => {
+      try {
+        const res = await fetch("/api/positions");
+        const data = await res.json();
+        const positions: any[] = data.success ? data.positions : [];
+        const svc = new ROSLIB.Service({
+          ros: rosRef.current!,
+          name: "/robot_ui/get_position",
+          serviceType: "robot_ui/GetPosition",
+        });
+        svc.advertise((request: any, response: any) => {
+          const pos = positions.find((p: any) => p.name === request.name);
+          response["success"] = pos != null;
+          response["data"] = pos ? JSON.stringify(pos) : "";
+          return true;
+        });
+        console.log("[ROS] /robot_ui/get_position service advertised");
+      } catch (e) {
+        console.warn("[ROS] Failed to advertise position service", e);
+      }
+    };
+    fetchAndAdvertise();
+  }, [isConnected]);
+
   const updateCurrentTaskIndex = useCallback((index: number) => {
     setCurrentTaskIndex(index);
   }, []);
@@ -446,6 +510,7 @@ export const RosProvider = ({ children }: { children: React.ReactNode }) => {
         safetyStatus,
         robotStatus,
         machineState,
+        gripperStatus,
         effectorPose,
         sendJob,
         sendGotoPosition,
@@ -463,6 +528,7 @@ export const RosProvider = ({ children }: { children: React.ReactNode }) => {
         isTestMode,
         setTestMode: setIsTestMode,
         publishSafetyLevel,
+        callGetPlanningModes,
         calibration,
         setCalibration,
         effectiveTcpOffset,

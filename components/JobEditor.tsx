@@ -29,6 +29,10 @@ import {
   CheckCircle2,
   AlertCircle,
   Gamepad2,
+  MapPin,
+  ChevronDown,
+  BrainCircuit,
+  RefreshCw,
 } from "lucide-react";
 import RosStatusBadge from "@/components/RosStatusBadge";
 import JogControlPanel from "@/components/JogControlPanel";
@@ -51,6 +55,17 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
+interface SavedPosition {
+  id: number;
+  name: string;
+  j1: number; j2: number; j3: number; j4: number; j5: number; j6: number;
+  rail: number;
+  gripper: number;
+  controlMode: string;
+  x?: number | null; y?: number | null; z?: number | null;
+  roll?: number | null; pitch?: number | null; yaw?: number | null;
+}
+
 interface Task {
   id: number;
   sequence: number;
@@ -66,6 +81,8 @@ interface Task {
   delay?: number;
   gripper?: number;
   controlMode?: string;
+  taskType?: string;       // "move" | "planning"
+  planningMode?: string | null;
   x?: number | null;
   y?: number | null;
   z?: number | null;
@@ -183,15 +200,15 @@ function SortableTaskCard({
       {/* Main Content */}
       <div
         className={`flex-1 p-5 space-y-4 transition-colors ${
-          isRunning ? "bg-blue-50/40 dark:bg-blue-500/10" : isDone ? "bg-green-50/40 dark:bg-green-500/10" : captured ? "bg-green-50/40 dark:bg-green-500/10" : testing ? "bg-orange-50/30 dark:bg-orange-500/08" : ""
+          isRunning ? "bg-blue-50/40 dark:bg-blue-500/10" : isDone ? "bg-green-50/40 dark:bg-green-500/10" : captured ? "bg-green-50/40 dark:bg-green-500/10" : testing ? "bg-orange-50/30 dark:bg-orange-500/08" : task.taskType === "planning" ? "bg-purple-50/40 dark:bg-purple-500/10" : ""
         }`}
       >
         {/* Row 1: Sequence badge + Label input + Delete */}
         <div className="flex items-center gap-3">
           <div className={`w-11 h-11 rounded-[12px] flex items-center justify-center font-black text-base flex-shrink-0 transition-all ${
-            isRunning ? "bg-blue-500 text-white scale-110" : isDone ? "bg-green-500 text-white" : "bg-gray-100 text-gray-500"
+            isRunning ? "bg-blue-500 text-white scale-110" : isDone ? "bg-green-500 text-white" : task.taskType === "planning" ? "bg-purple-500 text-white" : "bg-gray-100 text-gray-500"
           }`}>
-            {isRunning ? <Play size={16} fill="white" className="animate-pulse" /> : isDone ? "✓" : idx + 1}
+            {isRunning ? <Play size={16} fill="white" className="animate-pulse" /> : isDone ? "✓" : task.taskType === "planning" ? <BrainCircuit size={16} /> : idx + 1}
           </div>
           <input
             type="text"
@@ -205,6 +222,11 @@ function SortableTaskCard({
               ● RUNNING
             </span>
           )}
+          {task.taskType === "planning" && (
+            <span className="text-[11px] font-black text-purple-700 bg-purple-100 px-2 py-0.5 rounded-full flex-shrink-0">
+              🧠 Planning
+            </span>
+          )}
           <button
             onClick={() => onDelete(idx)}
             className="w-11 h-11 flex items-center justify-center text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors flex-shrink-0"
@@ -213,7 +235,16 @@ function SortableTaskCard({
           </button>
         </div>
 
-        {/* Row 2: Position values with icons */}
+        {/* Row 2: Planning mode info OR Position values */}
+        {task.taskType === "planning" ? (
+          <div className="flex items-center gap-3 bg-purple-100/60 dark:bg-purple-900/30 rounded-2xl px-4 py-3">
+            <BrainCircuit size={18} className="text-purple-500 shrink-0" />
+            <div>
+              <p className="text-[10px] font-black text-purple-400 uppercase">Planning Mode</p>
+              <p className="font-black text-purple-700 dark:text-purple-300">{task.planningMode || "—"}</p>
+            </div>
+          </div>
+        ) : (
         <div
           className={`grid grid-cols-2 gap-x-4 gap-y-2.5 transition-colors ${
             captured ? "text-green-600" : "text-gray-500"
@@ -276,6 +307,7 @@ function SortableTaskCard({
             </>
           )}
         </div>
+        )} {/* end else (non-planning) */}
 
         {/* Row 3: Speed slider */}
         <div className="flex items-center gap-3">
@@ -398,7 +430,7 @@ export default function JobEditor({
   onSave,
   onCancel,
 }: JobEditorProps) {
-  const { isConnected, jointStates, railPos, gripperPos, effectorPose, setTeachMode, sendGotoPosition, calibration, effectiveTcpOffset } =
+  const { isConnected, jointStates, railPos, gripperPos, effectorPose, setTeachMode, sendGotoPosition, calibration, effectiveTcpOffset, callGetPlanningModes } =
     useRos();
   const [jobName, setJobName] = useState(job?.name || "");
   const [jobDescription, setJobDescription] = useState(job?.description || "");
@@ -419,6 +451,13 @@ export default function JobEditor({
   const [taskJsonCopied, setTaskJsonCopied] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const dryRunCancelRef = useRef(false);
+  const [savedPositions, setSavedPositions] = useState<SavedPosition[]>([]);
+  const [showPositionDropdown, setShowPositionDropdown] = useState(false);
+  const [showPlanningModal, setShowPlanningModal] = useState(false);
+  const [planningModes, setPlanningModes] = useState<string[]>([]);
+  const [planningModesLoading, setPlanningModesLoading] = useState(false);
+  const [selectedPlanningMode, setSelectedPlanningMode] = useState("");
+  const [planningTaskLabel, setPlanningTaskLabel] = useState("");
 
   const showToast = (msg: string, ok: boolean) => {
     setToast({ msg, ok });
@@ -439,9 +478,72 @@ export default function JobEditor({
     };
   }, [setTeachMode]);
 
+  useEffect(() => {
+    fetch("/api/positions")
+      .then((r) => r.json())
+      .then((d) => { if (d.success) setSavedPositions(d.positions); })
+      .catch(() => {});
+  }, []);
+
+  const insertPositionAsTask = (pos: SavedPosition) => {
+    const newTask: Task = {
+      id: Date.now(),
+      sequence: tasks.length + 1,
+      label: pos.name,
+      j1: pos.j1, j2: pos.j2, j3: pos.j3, j4: pos.j4, j5: pos.j5, j6: pos.j6,
+      rail: pos.rail,
+      gripper: pos.gripper,
+      speed: 50,
+      delay: 0,
+      controlMode: pos.controlMode,
+      x: pos.x ?? null, y: pos.y ?? null, z: pos.z ?? null,
+      roll: pos.roll ?? null, pitch: pos.pitch ?? null, yaw: pos.yaw ?? null,
+    };
+    setTasks((prev) => [...prev, newTask]);
+    setShowPositionDropdown(false);
+    showToast(`เพิ่ม "${pos.name}" เป็น Task ${newTask.sequence}`, true);
+    setTimeout(() => {
+      scrollContainerRef.current?.scrollTo({ top: scrollContainerRef.current.scrollHeight, behavior: "smooth" });
+    }, 150);
+  };
+
   const openCaptureModal = () => {
     setCaptureLabel(`Task ${tasks.length + 1}`);
     setShowCaptureModal(true);
+  };
+
+  const openPlanningModal = async () => {
+    setPlanningTaskLabel(`Planning ${tasks.length + 1}`);
+    setSelectedPlanningMode("");
+    setPlanningModes([]);
+    setShowPlanningModal(true);
+    setPlanningModesLoading(true);
+    const modes = await callGetPlanningModes();
+    setPlanningModes(modes);
+    setPlanningModesLoading(false);
+  };
+
+  const confirmPlanningTask = () => {
+    if (!selectedPlanningMode) { showToast("กรุณาเลือกโหมด", false); return; }
+    const newTask: Task = {
+      id: Date.now(),
+      sequence: tasks.length + 1,
+      label: planningTaskLabel || `Planning ${tasks.length + 1}`,
+      j1: 0, j2: 0, j3: 0, j4: 0, j5: 0, j6: 0,
+      rail: 0,
+      gripper: 0,
+      speed: 50,
+      delay: 0,
+      controlMode: "joint",
+      taskType: "planning",
+      planningMode: selectedPlanningMode,
+    };
+    setTasks((prev) => [...prev, newTask]);
+    setShowPlanningModal(false);
+    showToast(`เพิ่ม Planning Task "${selectedPlanningMode}"`, true);
+    setTimeout(() => {
+      scrollContainerRef.current?.scrollTo({ top: scrollContainerRef.current.scrollHeight, behavior: "smooth" });
+    }, 150);
   };
 
   const confirmCapture = () => {
@@ -645,6 +747,8 @@ export default function JobEditor({
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               ...tasks[i], sequence: i + 1,
+              taskType: tasks[i].taskType ?? "move",
+              planningMode: tasks[i].planningMode ?? null,
               x: tasks[i].x ?? null, y: tasks[i].y ?? null, z: tasks[i].z ?? null,
               roll: tasks[i].roll ?? null, pitch: tasks[i].pitch ?? null, yaw: tasks[i].yaw ?? null,
             }),
@@ -685,6 +789,8 @@ export default function JobEditor({
               delay: t.delay ?? 0,
               gripper: t.gripper ?? 0,
               controlMode: t.controlMode ?? "joint",
+              taskType: t.taskType ?? "move",
+              planningMode: t.planningMode ?? null,
               x: t.x ?? null, y: t.y ?? null, z: t.z ?? null,
               roll: t.roll ?? null, pitch: t.pitch ?? null, yaw: t.yaw ?? null,
             });
@@ -795,6 +901,51 @@ export default function JobEditor({
           >
             + Capture Position
           </button>
+
+          {/* Task Planning Mode */}
+          <button
+            onClick={openPlanningModal}
+            className="w-full apple-btn bg-purple-50 text-purple-700 flex items-center justify-center gap-2"
+          >
+            <BrainCircuit size={16} /> Task Planning Mode
+          </button>
+
+          {/* Insert from Position Library */}
+          <div className="relative">
+            <button
+              onClick={() => setShowPositionDropdown((v) => !v)}
+              className="w-full apple-btn bg-blue-50 text-blue-600 flex items-center justify-center gap-2"
+            >
+              <MapPin size={16} /> เพิ่มจาก Position
+              <ChevronDown size={14} className={`ml-auto transition-transform ${showPositionDropdown ? "rotate-180" : ""}`} />
+            </button>
+            {showPositionDropdown && (
+              <div className="absolute left-0 right-0 top-full mt-2 bg-white dark:bg-[#1a2740] rounded-2xl shadow-2xl border border-gray-100 dark:border-white/10 z-30 overflow-hidden max-h-60 overflow-y-auto">
+                {savedPositions.length === 0 ? (
+                  <p className="text-center text-gray-400 text-sm py-6">ยังไม่มีตำแหน่งที่บันทึกไว้</p>
+                ) : (
+                  savedPositions.map((pos) => (
+                    <button
+                      key={pos.id}
+                      onClick={() => insertPositionAsTask(pos)}
+                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-blue-50 dark:hover:bg-white/5 text-left transition-colors"
+                    >
+                      <MapPin size={14} className="text-blue-500 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-bold text-sm truncate">{pos.name}</p>
+                        <p className="text-[10px] text-gray-400 font-mono">
+                          {pos.j1.toFixed(0)}° {pos.j2.toFixed(0)}° {pos.j3.toFixed(0)}°…
+                        </p>
+                      </div>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${pos.controlMode === "effector" ? "bg-purple-100 text-purple-700" : "bg-gray-100 text-gray-500"}`}>
+                        {pos.controlMode === "effector" ? "Effector" : "Joint"}
+                      </span>
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
 
           <button
             onClick={() => setShowJog((v) => !v)}
@@ -1083,6 +1234,83 @@ export default function JobEditor({
                 className="flex-1 py-4 rounded-2xl bg-blue-600 text-white font-black text-lg hover:bg-blue-700 transition-colors"
               >
                 ✓ Save Task
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Planning Mode Modal */}
+      {showPlanningModal && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-6">
+          <div className="bg-white dark:bg-[#0f1829] rounded-[32px] p-8 w-full max-w-md shadow-2xl space-y-6">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-purple-600 flex items-center justify-center">
+                <BrainCircuit size={22} className="text-white" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-black">Task Planning Mode</h2>
+                <p className="text-gray-400 text-sm">เลือกโหมดการวางแผน</p>
+              </div>
+            </div>
+
+            {/* Mode list */}
+            <div className="bg-gray-50 dark:bg-white/5 rounded-2xl overflow-hidden">
+              {planningModesLoading ? (
+                <div className="flex items-center justify-center gap-2 py-8 text-gray-400">
+                  <RefreshCw size={16} className="animate-spin" />
+                  <span className="text-sm">กำลังโหลดโหมด...</span>
+                </div>
+              ) : planningModes.length === 0 ? (
+                <div className="text-center py-8 text-gray-400 text-sm">
+                  ไม่พบโหมด — ตรวจสอบการเชื่อมต่อ ROS
+                </div>
+              ) : (
+                planningModes.map((mode) => (
+                  <button
+                    key={mode}
+                    onClick={() => setSelectedPlanningMode(mode)}
+                    className={`w-full flex items-center gap-3 px-5 py-4 text-left transition-colors border-b last:border-b-0 border-gray-100 dark:border-white/5 ${
+                      selectedPlanningMode === mode
+                        ? "bg-purple-50 dark:bg-purple-900/30"
+                        : "hover:bg-gray-100 dark:hover:bg-white/5"
+                    }`}
+                  >
+                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                      selectedPlanningMode === mode ? "border-purple-600 bg-purple-600" : "border-gray-300"
+                    }`}>
+                      {selectedPlanningMode === mode && <div className="w-2 h-2 rounded-full bg-white" />}
+                    </div>
+                    <span className={`font-bold ${selectedPlanningMode === mode ? "text-purple-700 dark:text-purple-300" : ""}`}>
+                      {mode}
+                    </span>
+                  </button>
+                ))
+              )}
+            </div>
+
+            {/* Task label */}
+            <input
+              type="text"
+              value={planningTaskLabel}
+              onChange={(e) => setPlanningTaskLabel(e.target.value)}
+              placeholder="ชื่อ Task..."
+              className="w-full p-4 bg-gray-50 dark:bg-white/5 rounded-2xl font-bold focus:outline-none focus:ring-2 focus:ring-purple-400"
+            />
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowPlanningModal(false)}
+                className="flex-1 py-4 rounded-2xl bg-gray-100 font-bold text-gray-600 hover:bg-gray-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmPlanningTask}
+                disabled={!selectedPlanningMode}
+                className="flex-1 py-4 rounded-2xl bg-purple-600 text-white font-black hover:bg-purple-700 disabled:opacity-40 transition-colors"
+              >
+                ✓ เพิ่ม Task
               </button>
             </div>
           </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRos } from "@/context/RosContext";
-import { ShieldCheck, Bot } from "lucide-react";
+import { ShieldCheck, Bot, Hand } from "lucide-react";
 
 function getRobotState(robotStatus: number, machineState: number) {
   if (machineState === 3)
@@ -16,7 +16,7 @@ function getRobotState(robotStatus: number, machineState: number) {
 }
 
 export default function RosStatusBadge() {
-  const { isConnected, safetyStatus, isTestMode, setTestMode, robotStatus, machineState } = useRos();
+  const { isConnected, safetyStatus, isTestMode, setTestMode, robotStatus, machineState, gripperStatus } = useRos();
 
   const safety =
     safetyStatus === 2
@@ -26,6 +26,13 @@ export default function RosStatusBadge() {
         : { label: "ปกติ", bg: "bg-emerald-500", text: "text-white" };
 
   const robotState = getRobotState(robotStatus, machineState);
+
+  const gripper =
+    gripperStatus === 2
+      ? { label: "Gripper Err", bg: "bg-red-100 text-red-700", dot: "bg-red-500 animate-pulse" }
+      : gripperStatus === 1
+        ? { label: "ถือของอยู่", bg: "bg-orange-100 text-orange-700", dot: "bg-orange-500" }
+        : { label: "มือว่าง", bg: "bg-gray-100 text-gray-500", dot: "bg-gray-300" };
 
   return (
     <div className="flex items-center gap-2">
@@ -63,6 +70,13 @@ export default function RosStatusBadge() {
         <div className={`w-1.5 h-1.5 rounded-full ${robotState.dot}`} />
         <Bot size={12} />
         {robotState.label}
+      </div>
+
+      {/* Gripper status */}
+      <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold ${gripper.bg}`}>
+        <div className={`w-1.5 h-1.5 rounded-full ${gripper.dot}`} />
+        <Hand size={12} />
+        {gripper.label}
       </div>
 
       {/* Safety status — big pill */}

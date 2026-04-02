@@ -32,6 +32,10 @@ model Task {
   j6        Float
   rail      Float
 
+  // Task type
+  taskType    String @default("move")  // "move" | "planning"
+  planningMode String?                 // mode name for planning tasks
+
   // Settings
   speed       Int    @default(50)
   delay       Int    @default(0)
@@ -47,4 +51,26 @@ model Task {
   yaw   Float?  // Yaw in degrees
 
   createdAt DateTime @default(now())
+}
+
+model Position {
+  id          Int      @id @default(autoincrement())
+  name        String
+  j1          Float    @default(0)
+  j2          Float    @default(0)
+  j3          Float    @default(0)
+  j4          Float    @default(0)
+  j5          Float    @default(0)
+  j6          Float    @default(0)
+  rail        Float    @default(0)
+  gripper     Int      @default(0)
+  controlMode String   @default("joint")  // "joint" | "effector"
+  x           Float?
+  y           Float?
+  z           Float?
+  roll        Float?
+  pitch       Float?
+  yaw         Float?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }

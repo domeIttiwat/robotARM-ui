@@ -31,6 +31,7 @@ import {
   CheckCircle2,
   AlertTriangle,
   Timer,
+  BrainCircuit,
 } from "lucide-react";
 import JogControlPanel from "@/components/JogControlPanel";
 import CameraFeedWidget from "@/components/CameraFeedWidget";
@@ -52,6 +53,8 @@ interface Task {
   delay?: number;
   gripper?: number;
   controlMode?: string;
+  taskType?: string;
+  planningMode?: string | null;
   x?: number | null;
   y?: number | null;
   z?: number | null;
@@ -717,11 +720,15 @@ export default function JobDetailView({ job, onBack, onUpdate, autoStart = false
               key={task.id}
               ref={(el) => { taskRefs.current[idx] = el; }}
               className={`rounded-2xl border-2 p-5 transition-all duration-300 ${
-                isActive
-                  ? "border-blue-500 bg-blue-50 shadow-lg shadow-blue-100/60"
-                  : isDone
-                    ? "border-green-400 bg-green-50"
-                    : "border-gray-200 bg-white dark:border-white/10 dark:bg-[#0f1829]"
+                isActive && task.taskType === "planning"
+                  ? "border-purple-500 bg-purple-50 shadow-lg shadow-purple-100/60"
+                  : isActive
+                    ? "border-blue-500 bg-blue-50 shadow-lg shadow-blue-100/60"
+                    : isDone
+                      ? "border-green-400 bg-green-50"
+                      : task.taskType === "planning"
+                        ? "border-purple-200 bg-purple-50/30 dark:border-purple-900/40 dark:bg-[#0f1829]"
+                        : "border-gray-200 bg-white dark:border-white/10 dark:bg-[#0f1829]"
               }`}
             >
               {/* Top row: badge + label + meta */}
@@ -729,17 +736,25 @@ export default function JobDetailView({ job, onBack, onUpdate, autoStart = false
                 {/* Sequence badge */}
                 <div
                   className={`w-11 h-11 rounded-2xl flex items-center justify-center font-black text-white text-base shrink-0 transition-all ${
-                    isActive
-                      ? "bg-blue-600 scale-110"
-                      : isDone
-                        ? "bg-green-500"
-                        : "bg-gray-300"
+                    isActive && task.taskType === "planning"
+                      ? "bg-purple-600 scale-110"
+                      : isActive
+                        ? "bg-blue-600 scale-110"
+                        : isDone
+                          ? "bg-green-500"
+                          : task.taskType === "planning"
+                            ? "bg-purple-400"
+                            : "bg-gray-300"
                   }`}
                 >
                   {isActive ? (
-                    <Play size={18} fill="white" className="animate-pulse" />
+                    task.taskType === "planning"
+                      ? <BrainCircuit size={18} className="animate-pulse" />
+                      : <Play size={18} fill="white" className="animate-pulse" />
                   ) : isDone ? (
                     "✓"
+                  ) : task.taskType === "planning" ? (
+                    <BrainCircuit size={16} />
                   ) : (
                     task.sequence
                   )}
@@ -751,8 +766,13 @@ export default function JobDetailView({ job, onBack, onUpdate, autoStart = false
                     <h3 className="font-black text-lg leading-tight">
                       {task.label || `Task ${task.sequence}`}
                     </h3>
+                    {task.taskType === "planning" && (
+                      <span className="text-[10px] font-black text-purple-700 bg-purple-100 px-2 py-0.5 rounded-full">
+                        🧠 Planning
+                      </span>
+                    )}
                     {isActive && (
-                      <span className="text-[11px] font-black text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full animate-pulse">
+                      <span className={`text-[11px] font-black px-2 py-0.5 rounded-full animate-pulse ${task.taskType === "planning" ? "text-purple-600 bg-purple-100" : "text-blue-600 bg-blue-100"}`}>
                         ● IN PROGRESS
                       </span>
                     )}
@@ -809,7 +829,21 @@ export default function JobDetailView({ job, onBack, onUpdate, autoStart = false
                 )}
               </div>
 
-              {/* Position values with icons */}
+              {/* Planning mode info OR Position values */}
+              {task.taskType === "planning" ? (
+                <div className={`flex items-center gap-3 rounded-xl px-3 py-2.5 mb-3 ${isActive ? "bg-purple-100/60" : isDone ? "bg-green-100/40" : "bg-purple-50/60"}`}>
+                  <BrainCircuit size={16} className={isActive ? "text-purple-600" : "text-purple-400"} />
+                  <div>
+                    <p className="text-[9px] font-black text-purple-400 uppercase">Planning Mode</p>
+                    <p className={`font-black text-sm ${isActive ? "text-purple-700" : isDone ? "text-green-700" : "text-purple-600"}`}>
+                      {task.planningMode || "—"}
+                    </p>
+                  </div>
+                  {isActive && (
+                    <span className="ml-auto text-[10px] font-bold text-purple-500 animate-pulse">กำลังคำนวน...</span>
+                  )}
+                </div>
+              ) : (
               <div
                 className={`grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs mb-3 ${
                   isActive ? "text-blue-500" : isDone ? "text-green-600" : "text-gray-400"
@@ -862,6 +896,7 @@ export default function JobDetailView({ job, onBack, onUpdate, autoStart = false
                   </>
                 )}
               </div>
+              )} {/* end else (non-planning) */}
 
               {/* Per-task progress bar */}
               <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">

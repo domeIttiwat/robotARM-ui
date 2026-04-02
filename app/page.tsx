@@ -7,7 +7,8 @@ import { useViewerFlips } from "@/hooks/useViewerFlips";
 import JobDetailView from "@/components/JobDetailView";
 import JobEditor from "@/components/JobEditor";
 import RosStatusBadge from "@/components/RosStatusBadge";
-import { Activity, LayoutGrid, List, Home, Pencil, Gamepad2, Settings2, Moon, Sun, Camera } from "lucide-react";
+import PositionEditor from "@/components/PositionEditor";
+import { Activity, LayoutGrid, List, Home, Pencil, Gamepad2, Settings2, Moon, Sun, Camera, MapPin } from "lucide-react";
 import { useDarkMode } from "@/hooks/useDarkMode";
 import CalibrationModal from "@/components/CalibrationModal";
 import JogControlPanel from "@/components/JogControlPanel";
@@ -54,12 +55,14 @@ const Dashboard = ({
   onEditJob,
   autoHome,
   onToggleAutoHome,
+  onAddPosition,
 }: {
   onNew: () => void;
   onSelectJob: (job: Job) => void;
   onEditJob: (job: Job) => void;
   autoHome: boolean;
   onToggleAutoHome: () => void;
+  onAddPosition: () => void;
 }) => {
   const { jointStates, sendGotoPosition, effectiveTcpOffset, calibration } = useRos();
   const { flips } = useViewerFlips();
@@ -158,8 +161,8 @@ const Dashboard = ({
                 </span>
               )}
             </div>
-            <div className="flex items-center gap-3">
-              <div className="flex gap-1 bg-gray-100 rounded-full p-1">
+            <div className="flex items-center gap-2">
+              <div className="flex gap-1 bg-gray-100 rounded-full p-1 shrink-0">
                 <button
                   onClick={() => handleViewMode("card")}
                   className={`px-3 py-1.5 rounded-full transition-all ${
@@ -182,8 +185,15 @@ const Dashboard = ({
                 </button>
               </div>
               <button
+                onClick={onAddPosition}
+                className="shrink-0 py-3 px-3 rounded-2xl bg-blue-50 hover:bg-blue-100 text-blue-600 font-black text-sm flex items-center justify-center gap-1.5 transition-colors"
+                title="จัดการตำแหน่งพิเศษ"
+              >
+                <MapPin size={15} />
+              </button>
+              <button
                 onClick={onNew}
-                className="flex-1 py-3 rounded-2xl bg-black text-white font-black text-sm flex items-center justify-center gap-2 shadow-lg whitespace-nowrap"
+                className="flex-1 min-w-0 py-3 rounded-2xl bg-black text-white font-black text-sm flex items-center justify-center gap-1.5 shadow-lg"
               >
                 + สร้างงานใหม่
               </button>
@@ -313,6 +323,7 @@ export default function App() {
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [dashKey, setDashKey] = useState(0);
   const [autoHome, setAutoHome] = useState(false);
+  const [showPositionEditor, setShowPositionEditor] = useState(false);
 
   // After hydration: read persisted values from storage
   useEffect(() => {
@@ -392,8 +403,11 @@ export default function App() {
         </div>
       ) : (
         <div className="w-full h-full animate-splash">
+          {showPositionEditor && (
+            <PositionEditor onClose={() => setShowPositionEditor(false)} />
+          )}
           {view === "dash" ? (
-            <Dashboard key={dashKey} onNew={() => setView("create")} onSelectJob={handleSelectJob} onEditJob={handleEditJob} autoHome={autoHome} onToggleAutoHome={toggleAutoHome} />
+            <Dashboard key={dashKey} onNew={() => setView("create")} onSelectJob={handleSelectJob} onEditJob={handleEditJob} autoHome={autoHome} onToggleAutoHome={toggleAutoHome} onAddPosition={() => setShowPositionEditor(true)} />
           ) : view === "edit" && selectedJob ? (
             <JobEditor mode="edit" job={selectedJob} onSave={handleJobSave} onCancel={handleBackToDash} />
           ) : view === "detail" && selectedJob ? (

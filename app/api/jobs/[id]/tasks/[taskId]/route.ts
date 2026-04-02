@@ -7,7 +7,7 @@ export async function PATCH(
 ) {
   try {
     const { taskId } = await params;
-    const { label, sequence, j1, j2, j3, j4, j5, j6, rail, speed, delay, gripper, controlMode, x, y, z, roll, pitch, yaw } = await req.json();
+    const { label, sequence, j1, j2, j3, j4, j5, j6, rail, speed, delay, gripper, controlMode, x, y, z, roll, pitch, yaw, taskType, planningMode } = await req.json();
 
     const task = await prisma.task.update({
       where: { id: parseInt(taskId) },
@@ -25,6 +25,8 @@ export async function PATCH(
         ...(delay !== undefined && { delay }),
         ...(gripper !== undefined && { gripper }),
         ...(controlMode !== undefined && { controlMode }),
+        ...(taskType !== undefined && { taskType }),
+        ...(planningMode !== undefined && { planningMode: planningMode ?? null }),
         ...(x !== undefined && { x: x ?? null }),
         ...(y !== undefined && { y: y ?? null }),
         ...(z !== undefined && { z: z ?? null }),
