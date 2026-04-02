@@ -27,6 +27,10 @@ import {
   Check,
   Download,
   Gamepad2,
+  Loader2,
+  CheckCircle2,
+  AlertTriangle,
+  Timer,
 } from "lucide-react";
 import JogControlPanel from "@/components/JogControlPanel";
 import CameraFeedWidget from "@/components/CameraFeedWidget";
@@ -332,8 +336,7 @@ export default function JobDetailView({ job, onBack, onUpdate, autoStart = false
 
   // ── wait for robot movement.
   // Returns: "ok" (done), "interrupted" (paused — caller retries), "singularity" (caller retries as joint).
-  const waitForRobotMovement = async (task: Task, prevTask?: Task): Promise<"ok" | "interrupted" | "singularity"> => {
-    const moveMsEst = estimateTaskTime(task, prevTask) - (task.delay || 0);
+  const waitForRobotMovement = async (task: Task, _prevTask?: Task): Promise<"ok" | "interrupted" | "singularity"> => {
     let interrupted = false;
 
     // Reset machineState ref so we don't read a stale "reached" from the previous task
@@ -347,45 +350,25 @@ export default function JobDetailView({ job, onBack, onUpdate, autoStart = false
       await new Promise(r => setTimeout(r, 50));
     }
 
-    if (robotStatusRef.current !== 0 || machineStateRef.current !== 0) {
-      // Robot is moving — wait for a terminal machine state or robot idle
-      let moveDone = Date.now() + moveMsEst * 3 + 3000;
-      while (Date.now() < moveDone) {
-        if (executionCancelRef.current) return "ok";
+    // Infinite loop — exits only on authoritative signals, cancel, or idle fallback
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      if (executionCancelRef.current) return "ok";
 
-        // Check machine state (authoritative "done" signal)
-        if (machineStateRef.current === 2) return "ok";        // reached target
-        if (machineStateRef.current === 3) return "singularity"; // kinematic singularity
+      // Authoritative "done" signals from robot
+      if (machineStateRef.current === 2) return "ok";          // reached target
+      if (machineStateRef.current === 3) return "singularity"; // kinematic singularity
 
-        // Fallback: robot_status went idle and no machine state signal
-        if (robotStatusRef.current === 0 && machineStateRef.current === 0) break;
+      // Fallback: robot went idle without sending state=2 (disconnect / firmware gap)
+      if (robotStatusRef.current === 0 && machineStateRef.current === 0) break;
 
-        if (userPausedRef.current) {
-          if (!interrupted) {
-            stopExecution(); // halt robot NOW (publishes /stop_execution)
-            interrupted = true;
-          }
-          moveDone += 50; // wait for robot to confirm stop (status=0)
-        }
-        await new Promise(r => setTimeout(r, 50));
-      }
-    } else {
-      // No feedback at all — use time estimate
-      const waitMs = Math.max(2000, (100 - (task.speed ?? 50)) / 100 * 5000);
-      let elapsed = 0;
-      while (elapsed < waitMs) {
-        if (executionCancelRef.current) return "ok";
-        const ms = machineStateRef.current as number;
-        if (ms === 2) return "ok";
-        if (ms === 3) return "singularity";
-        if (userPausedRef.current) {
-          stopExecution();
+      if (userPausedRef.current) {
+        if (!interrupted) {
+          stopExecution(); // halt robot NOW (publishes /stop_execution)
           interrupted = true;
-          break;
         }
-        await new Promise(r => setTimeout(r, 50));
-        elapsed += 50;
       }
+      await new Promise(r => setTimeout(r, 50));
     }
 
     // Hold here until user resumes
@@ -798,6 +781,21 @@ export default function JobDetailView({ job, onBack, onUpdate, autoStart = false
                     </span>
                   </div>
                 </div>
+
+                {/* machine_state badge — right side */}
+                {isActive && isExecuting && (
+                  <span className={`shrink-0 self-center inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                    machineState === 1 ? 'bg-blue-50 text-blue-500' :
+                    machineState === 2 ? 'bg-green-50 text-green-600' :
+                    machineState === 3 ? 'bg-red-50 text-red-600' :
+                    'bg-gray-100 text-gray-400'
+                  }`}>
+                    {machineState === 0 && <><Timer size={10} /> รอสัญญาณ</>}
+                    {machineState === 1 && <><Loader2 size={10} className="animate-spin" /> กำลังเคลื่อนที่</>}
+                    {machineState === 2 && <><CheckCircle2 size={10} /> ถึงเป้าหมาย</>}
+                    {machineState === 3 && <><AlertTriangle size={10} /> Singularity</>}
+                  </span>
+                )}
 
                 {/* Progress % */}
                 {isExecuting && (
