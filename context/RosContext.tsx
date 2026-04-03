@@ -60,6 +60,8 @@ interface RosContextType {
   calibration: CalibrationData;
   setCalibration: (data: CalibrationData) => void;
   effectiveTcpOffset: { x: number; y: number; z: number };
+  jointMsgCount: number;
+  jointLastMsg: number | null;
 }
 
 const RosContext = createContext<RosContextType | null>(null);
@@ -86,6 +88,8 @@ export const RosProvider = ({ children }: { children: React.ReactNode }) => {
   );
   const [currentTaskIndex, setCurrentTaskIndex] = useState(0);
   const [isTestMode, setIsTestMode] = useState(false);
+  const [jointMsgCount, setJointMsgCount] = useState(0);
+  const [jointLastMsg, setJointLastMsg] = useState<number | null>(null);
 
   const [calibration, setCalibrationState] = useState<CalibrationData>(DEFAULT_CALIBRATION);
 
@@ -170,6 +174,8 @@ export const RosProvider = ({ children }: { children: React.ReactNode }) => {
         if (m.velocity && m.velocity.length >= 6) {
           setJointVelocities(m.velocity.slice(0, 6));
         }
+        setJointMsgCount(n => n + 1);
+        setJointLastMsg(Date.now());
       });
 
       // End-effector pose subscriber (XYZ mm + RPY degrees)
@@ -532,6 +538,8 @@ export const RosProvider = ({ children }: { children: React.ReactNode }) => {
         calibration,
         setCalibration,
         effectiveTcpOffset,
+        jointMsgCount,
+        jointLastMsg,
       }}
     >
       {children}

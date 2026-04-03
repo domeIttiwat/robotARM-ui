@@ -145,13 +145,16 @@ function MaterialController({
 
 // ─── Robot joints animation ───────────────────────────────────────────────────
 function RobotScene({
-  joints, flips, offsets, gripperPos,
+  joints, flips, offsets, gripperPos, onNodesReady,
 }: {
   joints: number[]; flips: number[]; offsets: number[]; gripperPos: number;
+  onNodesReady?: (found: Record<string, boolean>) => void;
 }) {
   const { scene } = useGLTF(MODEL_URL);
-  const nodeRefs   = useRef<(THREE.Object3D | null)[]>([null, null, null, null, null, null]);
+  const nodeRefs      = useRef<(THREE.Object3D | null)[]>([null, null, null, null, null, null]);
   const gripperNodeRef = useRef<THREE.Object3D | null>(null);
+  const onNodesReadyRef = useRef(onNodesReady);
+  onNodesReadyRef.current = onNodesReady;
 
   // Refs so useFrame always reads the latest values without stale closure
   const jointsRef     = useRef(joints);
@@ -164,8 +167,14 @@ function RobotScene({
   gripperPosRef.current = gripperPos;
 
   useEffect(() => {
+    // Log all object names in the scene for debugging
+    const allNames: string[] = [];
+    scene.traverse((obj) => { if (obj.name) allNames.push(obj.name); });
+    console.log("[RobotScene] All objects:", allNames.join(", "));
+
     ["J1", "J2", "J3", "J4", "J5", "J6"].forEach((name, i) => {
       nodeRefs.current[i] = scene.getObjectByName(name) ?? null;
+      console.log(`[RobotScene] ${name}: ${nodeRefs.current[i] ? "FOUND ✓" : "NOT FOUND ✗"}`);
     });
     // Try common gripper node names in the GLB
     gripperNodeRef.current =
@@ -173,6 +182,19 @@ function RobotScene({
       scene.getObjectByName("gripper") ??
       scene.getObjectByName("GRIPPER") ??
       null;
+
+    const found: Record<string, boolean> = {
+      J1: !!nodeRefs.current[0],
+      J2: !!nodeRefs.current[1],
+      J3: !!nodeRefs.current[2],
+      J4: !!nodeRefs.current[3],
+      J5: !!nodeRefs.current[4],
+      J6: !!nodeRefs.current[5],
+    };
+    onNodesReadyRef.current?.(found);
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("robotNodesDiscovered", { detail: found }));
+    }
   }, [scene]);
 
   useFrame(() => {
@@ -326,6 +348,8 @@ export interface RobotViewer3DProps {
   onMaterialsDiscovered?: (names: string[]) => void;
   /** Called when safety zone level changes: 0=safe, 1=warn(slow), 2=stop */
   onSafetyLevelChange?: (level: 0 | 1 | 2) => void;
+  /** Called once after GLB loads with J1-J6 node found status */
+  onNodesReady?: (found: Record<string, boolean>) => void;
 }
 
 export default function RobotViewer3D({
@@ -337,6 +361,7 @@ export default function RobotViewer3D({
   settingsOverride,
   onMaterialsDiscovered,
   onSafetyLevelChange,
+  onNodesReady,
 }: RobotViewer3DProps) {
   const { settings: storedSettings, update: updateSettings } = useViewerSettings();
 
@@ -457,7 +482,7 @@ export default function RobotViewer3D({
           {/* When reflector is on: HDR still lights the scene but NOT shown as skybox */}
           {isHQ && <Environment files={`/models/${s.hdrFile ?? DEFAULT_SETTINGS.hdrFile}`} background={s.bgMode === "hdr"} />}
 
-          <RobotScene joints={joints} flips={flips} offsets={s.jOffsets ?? DEFAULT_SETTINGS.jOffsets} gripperPos={gripperPos} />
+          <RobotScene joints={joints} flips={flips} offsets={s.jOffsets ?? DEFAULT_SETTINGS.jOffsets} gripperPos={gripperPos} onNodesReady={onNodesReady} />
 
           <MaterialController
             matColors={s.matColors ?? {}}

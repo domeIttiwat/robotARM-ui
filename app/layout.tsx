@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { RosProvider } from "@/context/RosContext";
 import SafetyOverlay from "@/components/SafetyOverlay";
+import JointDebugPanel from "@/components/JointDebugPanel";
 
 export const metadata: Metadata = {
   title: "Robot Arm Studio",
@@ -25,6 +26,7 @@ export default function RootLayout({
       <body className="antialiased h-full w-full m-0 p-0 overflow-hidden">
         <RosProvider>
           <SafetyOverlay />
+          <JointDebugPanel />
           {children}
         </RosProvider>
       </body>
