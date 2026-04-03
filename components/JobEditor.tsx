@@ -753,7 +753,10 @@ export default function JobEditor({
               roll: tasks[i].roll ?? null, pitch: tasks[i].pitch ?? null, yaw: tasks[i].yaw ?? null,
             }),
           });
-          if (!taskRes.ok) throw new Error("Failed to create task");
+          if (!taskRes.ok) {
+            const errData = await taskRes.json().catch(() => ({ error: `HTTP ${taskRes.status}` }));
+            throw new Error(errData.error || `Failed to create task (HTTP ${taskRes.status})`);
+          }
         }
         showToast("สร้างงานสำเร็จ!", true);
       } else {
