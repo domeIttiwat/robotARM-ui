@@ -600,7 +600,7 @@ export default function JobDetailView({ job, onBack, onUpdate, autoStart = false
 
             {/* Home — always visible, large touch target */}
             <button
-              onClick={() => sendGotoPosition({ sequence: 0, label: "Home", j1: 0, j2: 0, j3: 0, j4: 0, j5: 0, j6: 0, rail: 0, speed: 20, gripper: 0 })}
+              onClick={() => sendGotoPosition({ sequence: 0, label: "Home", joint_1: 0, joint_2: 0, joint_3: 0, joint_4: 0, joint_5: 0, joint_6: 0, slider_joint: 0, speed: 20, gripper: 0 })}
               disabled={isExecuting}
               className="flex items-center gap-2 px-5 py-3 bg-gray-100 hover:bg-gray-200 active:bg-gray-300 text-gray-700 rounded-2xl transition-colors disabled:opacity-30 font-bold"
               title="ส่งหุ่นยนต์กลับตำแหน่ง Home"
