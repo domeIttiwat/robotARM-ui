@@ -155,7 +155,8 @@ function handleGotoPositionMock(taskData: any) {
   stopAutoPublish();
   if (jogInactivityTimer) clearTimeout(jogInactivityTimer);
 
-  if (taskData.controlMode === "effector") {
+  const controlMode = taskData.control_mode ?? taskData.controlMode ?? "joint";
+  if (controlMode === "effector") {
     // Run IK to find joint targets from Cartesian target
     const result = simpleIK(
       taskData.x ?? 0, taskData.y ?? 0, taskData.z ?? 0,

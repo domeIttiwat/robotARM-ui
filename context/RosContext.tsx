@@ -318,8 +318,9 @@ export const RosProvider = ({ children }: { children: React.ReactNode }) => {
         return;
       }
       const cal = calibrationRef.current;
+      const { controlMode: _cm, ...taskDataRest } = taskData;
       const rawTask = {
-        ...taskData,
+        ...taskDataRest,
         joint_1: applyInverse(taskData.joint_1, 0),
         joint_2: applyInverse(taskData.joint_2, 1),
         joint_3: applyInverse(taskData.joint_3, 2),
@@ -328,6 +329,8 @@ export const RosProvider = ({ children }: { children: React.ReactNode }) => {
         joint_6: applyInverse(taskData.joint_6, 5),
         slider_joint: applyInverse(taskData.slider_joint, 6),
         gripper: applyInverse(taskData.gripper, 7),
+        // Control mode — always explicit (snake_case for ROS firmware)
+        control_mode: taskData.controlMode ?? "joint",
         // Effector mode: include Cartesian target for robot IK
         ...(taskData.controlMode === "effector" && taskData.x != null && {
           x: taskData.x, y: taskData.y, z: taskData.z,

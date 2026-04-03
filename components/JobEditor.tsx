@@ -648,6 +648,11 @@ export default function JobEditor({
       slider_joint: task.slider_joint,
       speed: task.speed ?? 50,
       gripper: task.gripper ?? 0,
+      controlMode: task.controlMode ?? "joint",
+      ...(task.controlMode === "effector" && task.x != null && {
+        x: task.x, y: task.y, z: task.z,
+        roll: task.roll, pitch: task.pitch, yaw: task.yaw,
+      }),
     });
     const moveDuration = Math.max(2000, ((100 - (task.speed ?? 50)) / 100) * 5000);
     setTimeout(() => setTeachMode(true), moveDuration);
@@ -669,6 +674,11 @@ export default function JobEditor({
         slider_joint: task.slider_joint,
         speed: task.speed ?? 50,
         gripper: task.gripper ?? 0,
+        controlMode: task.controlMode ?? "joint",
+        ...(task.controlMode === "effector" && task.x != null && {
+          x: task.x, y: task.y, z: task.z,
+          roll: task.roll, pitch: task.pitch, yaw: task.yaw,
+        }),
       });
       // Movement wait — same formula as real execution
       const moveMs = Math.max(2000, ((100 - (task.speed ?? 50)) / 100) * 5000);
@@ -833,7 +843,7 @@ export default function JobEditor({
         <RosStatusBadge />
         <div className="flex gap-4">
           <button
-            onClick={() => sendGotoPosition({ sequence: 0, label: "Home", joint_1: 0, joint_2: 0, joint_3: 0, joint_4: 0, joint_5: 0, joint_6: 0, slider_joint: 0, speed: 20, gripper: 0 })}
+            onClick={() => sendGotoPosition({ sequence: 0, label: "Home", joint_1: 0, joint_2: 0, joint_3: 0, joint_4: 0, joint_5: 0, joint_6: 0, slider_joint: 0, speed: 20, gripper: 0, controlMode: "joint" })}
             disabled={dryRunIdx >= 0}
             className="p-3 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-colors disabled:opacity-30"
             title="ส่งหุ่นยนต์กลับตำแหน่ง Home (ทุก Joint = 0)"
