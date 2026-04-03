@@ -34,6 +34,15 @@ let autoPublishTimer: NodeJS.Timeout | null = null;
 let machineStateTimer: NodeJS.Timeout | null = null;
 let robotStatusTimer: NodeJS.Timeout | null = null;
 
+// ─── Service registry ─────────────────────────────────────────────────────────
+// Map service name → WebSocket that advertised it (service server)
+const serviceServers = new Map<string, WebSocket>();
+// Map call id → caller WebSocket (for routing service_response back)
+const servicePendingCallers = new Map<string, WebSocket>();
+
+// Mock planning modes returned for /planning/get_modes
+const MOCK_PLANNING_MODES = ["joint_interpolation", "cartesian_linear", "cartesian_arc"];
+
 // Mock joint positions — updated by Jog/goto commands when no real sim
 let mockJointPositions = [0, 0, 0, 0, 0, 0, 0, 0]; // j1-j6 (deg), rail (mm), gripper (%)
 
@@ -116,6 +125,7 @@ function publishFakeEEPose(positions: number[]) {
 
 function simulateMachineState() {
   if (machineStateTimer) clearTimeout(machineStateTimer);
+  publishTopic("/machine_state", 1); // moving
   machineStateTimer = setTimeout(() => {
     publishTopic("/machine_state", 2); // reached
     machineStateTimer = setTimeout(() => publishTopic("/machine_state", 0), 200);
@@ -213,6 +223,9 @@ wss.on("connection", (ws: WebSocket) => {
       if (topic === "/safety_status") {
         setTimeout(() => publishTopic("/safety_status", mockSafetyStatus), 100);
       }
+      if (topic === "/gripper_status") {
+        setTimeout(() => publishTopic("/gripper_status", 0), 100);
+      }
     } else if (op === "publish") {
       const subs = subscribers.get(topic);
       const count = subs ? subs.size : 0;
@@ -251,6 +264,35 @@ wss.on("connection", (ws: WebSocket) => {
         }
       }
 
+      // Handle execute_trajectory: simulate running all tasks sequentially
+      if (topic === "/execute_trajectory" && !hasJointPublisher) {
+        try {
+          const jobData = JSON.parse(msg.msg.data);
+          const tasks: any[] = jobData.tasks ?? [];
+          publishTopic("/robot_status", 1); // executing
+          let delay = 300;
+          tasks.forEach((task: any) => {
+            const taskDelay = (task.delay ?? 0) + 1500;
+            setTimeout(() => {
+              handleGotoPositionMock(task);
+              simulateMachineState();
+            }, delay);
+            delay += taskDelay;
+          });
+          setTimeout(() => {
+            publishTopic("/robot_status", 0); // idle
+          }, delay + 200);
+        } catch {
+          setTimeout(() => publishTopic("/robot_status", 0), 2000);
+        }
+      }
+
+      // Handle stop_execution: cancel any pending execution simulation
+      if (topic === "/stop_execution" && msg.msg?.data === true) {
+        publishTopic("/robot_status", 0);
+        publishTopic("/machine_state", 0);
+      }
+
       // Relay to all subscribers except the sender
       if (subs && subs.size > 0) {
         const payload = JSON.stringify({
@@ -272,6 +314,68 @@ wss.on("connection", (ws: WebSocket) => {
     } else if (op === "advertise") {
       // Acknowledged but no action needed
       console.log(`[ADV] Client #${id} advertises ${topic}`);
+    } else if (op === "advertise_service") {
+      const svcName = msg.service;
+      serviceServers.set(svcName, ws);
+      console.log(`[SVC] Client #${id} advertises service ${svcName}`);
+    } else if (op === "call_service") {
+      const svcName = msg.service;
+      const callId = msg.id ?? `call_${Date.now()}`;
+      console.log(`[SVC] Client #${id} calls ${svcName} (id=${callId})`);
+
+      if (svcName === "/planning/get_modes") {
+        // Handle locally — return mock planning modes
+        const response = JSON.stringify({
+          op: "service_response",
+          service: svcName,
+          id: callId,
+          values: { success: true, message: JSON.stringify(MOCK_PLANNING_MODES) },
+          result: true,
+        });
+        if (ws.readyState === WebSocket.OPEN) ws.send(response);
+        console.log(`[SVC] /planning/get_modes → ${JSON.stringify(MOCK_PLANNING_MODES)}`);
+      } else if (serviceServers.has(svcName)) {
+        // Forward to service server (e.g. /robot_ui/get_position advertised by UI)
+        const server = serviceServers.get(svcName)!;
+        if (server.readyState === WebSocket.OPEN) {
+          servicePendingCallers.set(callId, ws);
+          server.send(JSON.stringify({
+            op: "service_request",
+            service: svcName,
+            id: callId,
+            args: msg.args ?? {},
+          }));
+        } else {
+          // Server disconnected; respond with failure
+          ws.send(JSON.stringify({
+            op: "service_response",
+            service: svcName,
+            id: callId,
+            values: { success: false, data: "" },
+            result: false,
+          }));
+        }
+      } else {
+        console.warn(`[SVC] No server registered for ${svcName}`);
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({
+            op: "service_response",
+            service: svcName,
+            id: callId,
+            values: {},
+            result: false,
+          }));
+        }
+      }
+    } else if (op === "service_response") {
+      // UI (service server) responding to a service_request → relay to original caller
+      const callId = msg.id;
+      const caller = servicePendingCallers.get(callId);
+      if (caller && caller.readyState === WebSocket.OPEN) {
+        caller.send(JSON.stringify(msg));
+        servicePendingCallers.delete(callId);
+        console.log(`[SVC] Relayed service_response for id=${callId}`);
+      }
     } else {
       console.log(`[?] Client #${id} unknown op: ${op}`);
     }
@@ -284,6 +388,19 @@ wss.on("connection", (ws: WebSocket) => {
     subscribers.forEach((subs, topic) => {
       subs.delete(ws);
       if (subs.size === 0) subscribers.delete(topic);
+    });
+
+    // Remove service server registration if this client was a server
+    serviceServers.forEach((serverWs, svcName) => {
+      if (serverWs === ws) {
+        serviceServers.delete(svcName);
+        console.log(`[SVC] Service server for ${svcName} disconnected`);
+      }
+    });
+
+    // Clean up any pending calls from this client
+    servicePendingCallers.forEach((callerWs, callId) => {
+      if (callerWs === ws) servicePendingCallers.delete(callId);
     });
 
     // Only reset publisher state if THE publisher client disconnected

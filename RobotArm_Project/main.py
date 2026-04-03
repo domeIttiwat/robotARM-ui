@@ -110,6 +110,12 @@ STATUS_IDLE       = 0   # done / stopped
 STATUS_TASK_DONE  = 1   # one task finished; more may follow  (must arrive < 600 ms)
 STATUS_EXECUTING  = 2   # currently moving
 
+# Machine state codes
+MACHINE_IDLE        = 0
+MACHINE_MOVING      = 1
+MACHINE_REACHED     = 2
+MACHINE_SINGULARITY = 3
+
 
 # ============================================================
 # RobotUIBridge — rosbridge v2 WebSocket client
@@ -471,7 +477,8 @@ def _load_next_task():
     traj['last_step_t'] = time.time()
     traj['duration']    = duration
     traj['waiting']     = False
-    bridge.publish("/machine_state", {"data": 0})   # reset → UI won't read stale REACHED
+    bridge.publish("/machine_state", {"data": MACHINE_IDLE})    # reset → UI won't read stale REACHED
+    bridge.publish("/machine_state", {"data": MACHINE_MOVING})  # moving — UI shows moving state
 
 
 def step_jog():

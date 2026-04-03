@@ -43,6 +43,7 @@ STATUS_EXECUTING = 2   # currently moving / executing
 
 # Machine state codes
 MACHINE_IDLE        = 0
+MACHINE_MOVING      = 1
 MACHINE_REACHED     = 2
 MACHINE_SINGULARITY = 3
 
@@ -600,6 +601,8 @@ class RobotSimulator:
         self._grip_end   = gripper_end
         self._move_time  = move_time
 
+        self.publish_machine_state(MACHINE_MOVING)  # 1 — robot is moving
+
         self._move_thread = threading.Thread(
             target=self.move_loop,
             args=(finalize,),
@@ -837,7 +840,7 @@ class RobotSimulator:
     def publish_machine_state(self, val: int):
         """Publish /machine_state — std_msgs/Int8 (on state change only)."""
         self._publish_raw("/machine_state", {"data": val})
-        labels = {0: "IDLE", 2: "REACHED", 3: "SINGULARITY"}
+        labels = {0: "IDLE", 1: "MOVING", 2: "REACHED", 3: "SINGULARITY"}
         print(f"[STATE]  machine_state = {val} ({labels.get(val, '?')})")
 
 

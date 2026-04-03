@@ -14,6 +14,7 @@ import { useViewerSettings, DEFAULT_SETTINGS, ViewerSettings } from "@/hooks/use
 import { useSkeletonData } from "@/hooks/useSkeletonData";
 import SkeletonOverlay3D from "@/components/SkeletonOverlay3D";
 import { loadJetsonConfig, makeWsUrl } from "@/lib/jetsonConfig";
+import { useRos } from "@/context/RosContext";
 
 const MODEL_URL   = "/models/RobotArm2.glb";
 const QUALITY_KEY = "robotViewerQuality";
@@ -143,24 +144,56 @@ function MaterialController({
 }
 
 // ─── Robot joints animation ───────────────────────────────────────────────────
-function RobotScene({ joints, flips, offsets }: { joints: number[]; flips: number[]; offsets: number[] }) {
+function RobotScene({
+  joints, flips, offsets, gripperPos,
+}: {
+  joints: number[]; flips: number[]; offsets: number[]; gripperPos: number;
+}) {
   const { scene } = useGLTF(MODEL_URL);
-  const nodeRefs = useRef<(THREE.Object3D | null)[]>([null, null, null, null, null, null]);
+  const nodeRefs   = useRef<(THREE.Object3D | null)[]>([null, null, null, null, null, null]);
+  const gripperNodeRef = useRef<THREE.Object3D | null>(null);
+
+  // Refs so useFrame always reads the latest values without stale closure
+  const jointsRef     = useRef(joints);
+  const flipsRef      = useRef(flips);
+  const offsetsRef    = useRef(offsets);
+  const gripperPosRef = useRef(gripperPos);
+  jointsRef.current     = joints;
+  flipsRef.current      = flips;
+  offsetsRef.current    = offsets;
+  gripperPosRef.current = gripperPos;
 
   useEffect(() => {
     ["J1", "J2", "J3", "J4", "J5", "J6"].forEach((name, i) => {
       nodeRefs.current[i] = scene.getObjectByName(name) ?? null;
     });
+    // Try common gripper node names in the GLB
+    gripperNodeRef.current =
+      scene.getObjectByName("Gripper") ??
+      scene.getObjectByName("gripper") ??
+      scene.getObjectByName("GRIPPER") ??
+      null;
   }, [scene]);
 
   useFrame(() => {
-    joints.forEach((deg, i) => {
+    const j = jointsRef.current;
+    const f = flipsRef.current;
+    const o = offsetsRef.current;
+
+    j.forEach((deg, i) => {
       const node = nodeRefs.current[i];
       if (!node) return;
       const [ax, ay, az] = BASE_AXES[i];
-      const rad = (deg + (offsets[i] ?? 0)) * DEG * flips[i];
+      const rad = (deg + (o[i] ?? 0)) * DEG * f[i];
       node.rotation.set(ax * rad, ay * rad, az * rad);
     });
+
+    // Animate gripper node: scale Y from 0 (open) to 1 (closed) based on gripperPos %
+    if (gripperNodeRef.current) {
+      const t = Math.max(0, Math.min(1, gripperPosRef.current / 100));
+      const s = 1.0 - t * 0.5; // 1.0 open → 0.5 closed (adjust to model)
+      gripperNodeRef.current.scale.setY(s);
+    }
   });
 
   return <primitive object={scene} />;
@@ -296,7 +329,7 @@ export interface RobotViewer3DProps {
 }
 
 export default function RobotViewer3D({
-  joints = [0, 0, 0, 0, 0, 0],
+  joints: jointsProp,
   flips  = [1, 1, 1, 1, 1, 1],
   className,
   tcpOffset = { x: 0, y: 0, z: 0 },
@@ -306,6 +339,11 @@ export default function RobotViewer3D({
   onSafetyLevelChange,
 }: RobotViewer3DProps) {
   const { settings: storedSettings, update: updateSettings } = useViewerSettings();
+
+  // Always read live data directly from ROS context
+  const { jointStates, gripperPos } = useRos();
+  // Use prop override only if explicitly provided (e.g. playback/preview); otherwise use live ROS data
+  const joints = jointsProp ?? jointStates;
 
   const [hq, setHq] = useState<boolean>(() => {
     if (typeof window === "undefined") return true;
@@ -419,7 +457,7 @@ export default function RobotViewer3D({
           {/* When reflector is on: HDR still lights the scene but NOT shown as skybox */}
           {isHQ && <Environment files={`/models/${s.hdrFile ?? DEFAULT_SETTINGS.hdrFile}`} background={s.bgMode === "hdr"} />}
 
-          <RobotScene joints={joints} flips={flips} offsets={s.jOffsets ?? DEFAULT_SETTINGS.jOffsets} />
+          <RobotScene joints={joints} flips={flips} offsets={s.jOffsets ?? DEFAULT_SETTINGS.jOffsets} gripperPos={gripperPos} />
 
           <MaterialController
             matColors={s.matColors ?? {}}
