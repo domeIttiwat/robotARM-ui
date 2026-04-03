@@ -9,6 +9,11 @@ export interface JetsonConfig {
   safetyPort:   number;   // safety detector (default 8765)
   wristPort:    number;   // wrist camera    (default 8766)
   skeletonPort: number;   // skeleton keypoints (default 8767)
+  // per-board overrides (fallback to ip if empty/unset)
+  safetyIp?:   string;   // Board A — safety stereo cameras
+  wristIp?:    string;   // Board B — wrist camera
+  skeletonIp?: string;   // Board C — skeleton/pose
+  agentPort:   number;   // camera agent HTTP port (default 5050)
 }
 
 const LS_KEY = "jetson_config";
@@ -31,6 +36,10 @@ function envDefaults(): JetsonConfig {
     safetyPort:   extractPort(safetyUrl,   8765),
     wristPort:    extractPort(wristUrl,    8766),
     skeletonPort: extractPort(skeletonUrl, 8767),
+    safetyIp:    process.env.NEXT_PUBLIC_SAFETY_IP    || undefined,
+    wristIp:     process.env.NEXT_PUBLIC_WRIST_IP     || undefined,
+    skeletonIp:  process.env.NEXT_PUBLIC_SKELETON_IP  || undefined,
+    agentPort:   Number(process.env.NEXT_PUBLIC_AGENT_PORT) || 5050,
   };
 }
 
@@ -50,4 +59,12 @@ export function saveJetsonConfig(cfg: JetsonConfig): void {
 
 export function makeWsUrl(ip: string, port: number): string {
   return `ws://${ip}:${port}`;
+}
+
+/** Return the board-specific IP for a service, falling back to the default ip. */
+export function getBoardIp(cfg: JetsonConfig, service: "safety" | "wrist" | "skeleton"): string {
+  if (service === "safety")   return cfg.safetyIp   || cfg.ip;
+  if (service === "wrist")    return cfg.wristIp    || cfg.ip;
+  if (service === "skeleton") return cfg.skeletonIp || cfg.ip;
+  return cfg.ip;
 }

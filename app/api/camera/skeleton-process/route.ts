@@ -1,8 +1,8 @@
 /**
  * Skeleton Pose Service Process Manager
- * Start / stop / restart detector/skeleton_service.py from the browser.
- * Uses the shared detector/.venv (same environment as main.py).
- * Module-level state persists for the life of the Next.js server process.
+ *
+ * Forwards commands to the Camera Agent on Board C (skeleton board) via HTTP.
+ * Falls back to local spawn() when boardIp === "localhost".
  */
 
 import { NextResponse } from "next/server";
@@ -11,6 +11,7 @@ import path from "path";
 import fs from "fs";
 import net from "net";
 import { venvBin, systemPython } from "@/lib/venvPath";
+import { loadBoardsConfig } from "@/app/api/camera/boards/route";
 
 let proc: ChildProcess | null = null;
 let setupProc: ChildProcess | null = null;
@@ -25,6 +26,9 @@ function pushLog(line: string) {
 function isRunning() {
   return proc !== null && proc.exitCode === null && !proc.killed;
 }
+function isSetupRunning() {
+  return setupProc !== null && setupProc.exitCode === null && !setupProc.killed;
+}
 
 function isPortFree(port: number): Promise<boolean> {
   return new Promise((resolve) => {
@@ -35,11 +39,50 @@ function isPortFree(port: number): Promise<boolean> {
   });
 }
 
-function isSetupRunning() {
-  return setupProc !== null && setupProc.exitCode === null && !setupProc.killed;
+function agentUrl(): string {
+  const cfg = loadBoardsConfig();
+  return `http://${cfg.skeletonIp}:${cfg.agentPort}`;
+}
+
+function isRemote(): boolean {
+  const cfg = loadBoardsConfig();
+  const ip = cfg.skeletonIp.trim().toLowerCase();
+  return ip !== "localhost" && ip !== "127.0.0.1" && ip !== "";
+}
+
+async function agentFetch(endpoint: string, body?: object): Promise<object> {
+  const url = `${agentUrl()}/${endpoint}`;
+  const res = await fetch(url, {
+    method: body !== undefined ? "POST" : "GET",
+    headers: body !== undefined ? { "Content-Type": "application/json" } : undefined,
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+    signal: AbortSignal.timeout(5000),
+  });
+  return res.json();
 }
 
 export async function GET() {
+  if (isRemote()) {
+    try {
+      const [statusData, logsData] = await Promise.all([
+        agentFetch("status") as Promise<{ running: boolean; pid: number | null }>,
+        agentFetch("logs")   as Promise<{ logs: string[] }>,
+      ]);
+      return NextResponse.json({
+        running: statusData.running, pid: statusData.pid ?? null,
+        setupRunning: false, venvReady: true,
+        logs: logsData.logs?.slice(-60) ?? [],
+        remote: true, agentUrl: agentUrl(),
+      });
+    } catch (err) {
+      return NextResponse.json({
+        running: false, pid: null, setupRunning: false, venvReady: false,
+        logs: [`[ERR] Cannot reach agent at ${agentUrl()}: ${err}`],
+        remote: true, agentUrl: agentUrl(),
+      });
+    }
+  }
+
   const detectorDir = path.join(process.cwd(), "detector");
   const venvPython  = venvBin(path.join(detectorDir, ".venv"), "python");
   return NextResponse.json({
@@ -48,40 +91,51 @@ export async function GET() {
     setupRunning: isSetupRunning(),
     venvReady:    fs.existsSync(venvPython),
     logs:         logBuf.slice(-60),
+    remote:       false,
   });
 }
 
 export async function POST(req: Request) {
   let body: { action?: string; camIndex?: unknown };
-  try {
-    body = await req.json();
-  } catch {
+  try { body = await req.json(); } catch {
     return NextResponse.json({ ok: false, error: "Invalid JSON body" }, { status: 400 });
   }
   const { action, camIndex } = body;
 
-  // ── stop ─────────────────────────────────────────────────────────────────
+  if (isRemote()) {
+    if (action === "stop") {
+      try { return NextResponse.json({ ...(await agentFetch("stop", {})), remote: true }); }
+      catch (err) { return NextResponse.json({ ok: false, error: String(err) }, { status: 502 }); }
+    }
+    if (action === "start" || action === "restart") {
+      const args: Record<string, unknown> = {};
+      if (camIndex != null) args.cam = camIndex;
+      try {
+        const result = await agentFetch(action, { script: "skeleton_service.py", args });
+        return NextResponse.json({ ...result, remote: true });
+      } catch (err) { return NextResponse.json({ ok: false, error: String(err) }, { status: 502 }); }
+    }
+    return NextResponse.json({ ok: false, error: "Unknown action (remote mode)" });
+  }
+
+  // ── Local fallback ────────────────────────────────────────────────────────
   if (action === "stop") {
     if (!isRunning()) return NextResponse.json({ ok: false, error: "Not running" });
-    proc!.kill("SIGTERM");
-    proc = null;
+    proc!.kill("SIGTERM"); proc = null;
     pushLog("⏹ Stopped by user");
     return NextResponse.json({ ok: true });
   }
 
-  // ── start / restart ───────────────────────────────────────────────────────
   if (action === "start" || action === "restart") {
     if (isRunning()) {
       if (action === "start") return NextResponse.json({ ok: false, error: "Already running" });
-      proc!.kill("SIGTERM");
-      proc = null;
+      proc!.kill("SIGTERM"); proc = null;
       await new Promise((r) => setTimeout(r, 600));
     }
 
     const portFree = await isPortFree(8767);
     if (!portFree && !isRunning()) {
-      pushLog("⚠ Port 8767 ถูกใช้งานโดย process อื่นอยู่แล้ว");
-      pushLog("  → หยุด process นั้นก่อน แล้วกด Start อีกครั้ง");
+      pushLog("⚠ Port 8767 ถูกใช้งานโดย process อื่น");
       return NextResponse.json({ ok: false, error: "port_conflict", port: 8767 });
     }
 
@@ -94,10 +148,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "detector/skeleton_service.py not found" });
 
     pushLog(`▶ Starting skeleton service (${pythonExe.includes(".venv") ? ".venv python" : "system python3"})`);
-
     const args = ["skeleton_service.py"];
     if (camIndex != null) args.push("--cam", String(camIndex));
-
     proc = spawn(pythonExe, args, { cwd: detectorDir });
 
     proc.stdout?.on("data", (d: Buffer) =>
@@ -106,15 +158,11 @@ export async function POST(req: Request) {
     proc.stderr?.on("data", (d: Buffer) =>
       String(d).split("\n").forEach((l) => l.trim() && pushLog(l))
     );
-    proc.on("exit", (code) => {
-      pushLog(`⏹ Process exited (code ${code ?? "?"})`);
-      proc = null;
-    });
+    proc.on("exit", (code) => { pushLog(`⏹ Process exited (code ${code ?? "?"})`); proc = null; });
 
     return NextResponse.json({ ok: true, pid: proc.pid });
   }
 
-  // ── setup: pip install mediapipe into detector/.venv ─────────────────────
   if (action === "setup") {
     if (isSetupRunning()) return NextResponse.json({ ok: false, error: "Setup already running" });
 
@@ -127,7 +175,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "detector/requirements.txt not found" });
 
     pushLog("⚙ Setting up Python environment (detector/.venv)...");
-
     const steps: Array<() => ChildProcess> = [];
     if (!fs.existsSync(venvDir)) {
       pushLog("⚙ Creating .venv ...");
@@ -145,7 +192,7 @@ export async function POST(req: Request) {
           else runSteps(idx + 1);
         });
       } else {
-        pushLog("⚙ Installing packages (this may take a few minutes)...");
+        pushLog("⚙ Installing packages...");
         const pip = spawn(venvPip, ["install", "-r", "requirements.txt"], { cwd: detectorDir });
         setupProc = pip;
         pip.stdout?.on("data", (d: Buffer) => String(d).split("\n").forEach((l) => l.trim() && pushLog(l)));
@@ -161,14 +208,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true });
   }
 
-  // ── reinstall: pip install --upgrade ─────────────────────────────────────
   if (action === "reinstall") {
     if (isSetupRunning()) return NextResponse.json({ ok: false, error: "Setup already running" });
     const detectorDir = path.join(process.cwd(), "detector");
     const venvPip     = venvBin(path.join(detectorDir, ".venv"), "pip");
-    if (!fs.existsSync(venvPip)) {
+    if (!fs.existsSync(venvPip))
       return NextResponse.json({ ok: false, error: "venv not found — run Setup first" });
-    }
     pushLog("⚙ Reinstalling packages...");
     const pip = spawn(venvPip, ["install", "-r", "requirements.txt", "--upgrade"], { cwd: detectorDir });
     setupProc = pip;

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Wifi, WifiOff, ShieldCheck, AlertTriangle, ShieldAlert } from "lucide-react";
-import { loadJetsonConfig, makeWsUrl } from "@/lib/jetsonConfig";
+import { loadJetsonConfig, makeWsUrl, getBoardIp } from "@/lib/jetsonConfig";
 
 interface DetectorPayload {
   cam_left:     string;
@@ -52,7 +52,7 @@ export default function CameraFeedWidget() {
   // Load URL from localStorage after mount (respects Jetson IP config)
   useEffect(() => {
     const cfg = loadJetsonConfig();
-    setWsUrl(makeWsUrl(cfg.ip, cfg.safetyPort));
+    setWsUrl(makeWsUrl(getBoardIp(cfg, "safety"), cfg.safetyPort));
   }, []);
 
   const connect = useCallback(() => {

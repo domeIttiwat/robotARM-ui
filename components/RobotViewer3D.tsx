@@ -13,7 +13,7 @@ import { Sparkle, Zap, RotateCcw, ShieldAlert, ShieldOff } from "lucide-react";
 import { useViewerSettings, DEFAULT_SETTINGS, ViewerSettings } from "@/hooks/useViewerSettings";
 import { useSkeletonData } from "@/hooks/useSkeletonData";
 import SkeletonOverlay3D from "@/components/SkeletonOverlay3D";
-import { loadJetsonConfig, makeWsUrl } from "@/lib/jetsonConfig";
+import { loadJetsonConfig, makeWsUrl, getBoardIp } from "@/lib/jetsonConfig";
 import { useRos } from "@/context/RosContext";
 
 const MODEL_URL   = "/models/RobotArm2.glb";
@@ -383,7 +383,7 @@ export default function RobotViewer3D({
   // ── Skeleton / collision ─────────────────────────────────────────────────
   const [skeletonWsUrl] = useState(() => {
     const cfg = loadJetsonConfig();
-    return makeWsUrl(cfg.ip, cfg.skeletonPort);
+    return makeWsUrl(getBoardIp(cfg, "skeleton"), cfg.skeletonPort);
   });
 
   const skeletonEnabled  = s.skeletonVisible  ?? DEFAULT_SETTINGS.skeletonVisible;

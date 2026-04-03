@@ -75,7 +75,7 @@ export const RosProvider = ({ children }: { children: React.ReactNode }) => {
   const [jointStates, setJointStates] = useState([0, 0, 0, 0, 0, 0]);
   const [jointVelocities, setJointVelocities] = useState([0, 0, 0, 0, 0, 0]);
   const [railPos, setRailPos] = useState(0);
-  const [gripperPos, setGripperPos] = useState(0);
+  const [gripperPos, _setGripperPos] = useState(0); // not in joint_states spec; kept for UI compatibility
   const [safetyStatus, setSafetyStatus] = useState(0);
   const [robotStatus, setRobotStatus] = useState(0);
   const [machineState, setMachineState] = useState(0);
@@ -161,18 +161,28 @@ export const RosProvider = ({ children }: { children: React.ReactNode }) => {
       });
       jointSub.subscribe((m: any) => {
         const cal = calibrationRef.current;
-        if (m.position) {
-          const calibratedJoints = m.position
-            .slice(0, 6)
-            .map((raw: number, i: number) => applyForward(raw, i, cal));
-          setJointStates(calibratedJoints);
-          if (m.position[6] !== undefined)
-            setRailPos(applyForward(m.position[6], 6, cal));
-          if (m.position[7] !== undefined)
-            setGripperPos(applyForward(m.position[7], 7, cal));
-        }
-        if (m.velocity && m.velocity.length >= 6) {
-          setJointVelocities(m.velocity.slice(0, 6));
+        if (m.position && Array.isArray(m.name)) {
+          const idx = (name: string) => (m.name as string[]).indexOf(name);
+
+          // joint_1 … joint_6 → indices 0-5 in our state array
+          const joints = (["joint_1","joint_2","joint_3","joint_4","joint_5","joint_6"] as const)
+            .map((jn, i) => {
+              const pos = idx(jn);
+              return pos >= 0 ? applyForward(m.position[pos], i, cal) : 0;
+            });
+          setJointStates(joints);
+
+          // slider_joint → rail
+          const sliderIdx = idx("slider_joint");
+          if (sliderIdx >= 0)
+            setRailPos(applyForward(m.position[sliderIdx], 6, cal));
+
+          // velocities — same name-based lookup
+          if (m.velocity && m.velocity.length === m.name.length) {
+            const vels = (["joint_1","joint_2","joint_3","joint_4","joint_5","joint_6"] as const)
+              .map((jn) => { const pos = idx(jn); return pos >= 0 ? m.velocity[pos] : 0; });
+            setJointVelocities(vels);
+          }
         }
         setJointMsgCount(n => n + 1);
         setJointLastMsg(Date.now());

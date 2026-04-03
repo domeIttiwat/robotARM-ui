@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import {
-  loadJetsonConfig, saveJetsonConfig, makeWsUrl, type JetsonConfig,
+  loadJetsonConfig, saveJetsonConfig, makeWsUrl, getBoardIp, type JetsonConfig,
 } from "@/lib/jetsonConfig";
 import {
   loadCameraConfig, saveCameraConfig, type CameraConfig,
@@ -132,27 +132,49 @@ function ToggleSwitch({ enabled, onChange }: { enabled: boolean; onChange: (v: b
 // ─────────────────────────────────────────────────────────────────────────────
 
 function ConnectionBar({ config, onApply }: { config: JetsonConfig; onApply: (c: JetsonConfig) => void }) {
-  const [ip,         setIp]         = useState(config.ip);
-  const [rosPort,    setRosPort]    = useState(config.rosPort);
-  const [safetyPort, setSafetyPort] = useState(config.safetyPort);
-  const [wristPort,  setWristPort]  = useState(config.wristPort);
-  const [applied,    setApplied]    = useState(false);
-  const [showPorts,  setShowPorts]  = useState(false);
+  const [ip,          setIp]          = useState(config.ip);
+  const [rosPort,     setRosPort]     = useState(config.rosPort);
+  const [safetyPort,  setSafetyPort]  = useState(config.safetyPort);
+  const [wristPort,   setWristPort]   = useState(config.wristPort);
+  const [safetyIp,    setSafetyIp]    = useState(config.safetyIp   ?? "");
+  const [wristIp,     setWristIp]     = useState(config.wristIp    ?? "");
+  const [skeletonIp,  setSkeletonIp]  = useState(config.skeletonIp ?? "");
+  const [agentPort,   setAgentPort]   = useState(config.agentPort  ?? 5050);
+  const [applied,     setApplied]     = useState(false);
+  const [showPorts,   setShowPorts]   = useState(false);
+  const [showBoards,  setShowBoards]  = useState(false);
 
   useEffect(() => {
     setIp(config.ip); setRosPort(config.rosPort);
     setSafetyPort(config.safetyPort); setWristPort(config.wristPort);
+    setSafetyIp(config.safetyIp ?? ""); setWristIp(config.wristIp ?? "");
+    setSkeletonIp(config.skeletonIp ?? ""); setAgentPort(config.agentPort ?? 5050);
   }, [config]);
 
-  const apply = () => {
+  const apply = async () => {
     const c: JetsonConfig = {
-      ip: ip.trim() || "localhost",
-      rosPort: rosPort || 9090,
-      safetyPort: safetyPort || 8765,
-      wristPort: wristPort || 8766,
+      ip:          ip.trim()  || "localhost",
+      rosPort:     rosPort    || 9090,
+      safetyPort:  safetyPort || 8765,
+      wristPort:   wristPort  || 8766,
       skeletonPort: config.skeletonPort || 8767,
+      safetyIp:    safetyIp.trim()   || undefined,
+      wristIp:     wristIp.trim()    || undefined,
+      skeletonIp:  skeletonIp.trim() || undefined,
+      agentPort:   agentPort || 5050,
     };
     onApply(c);
+    // Also persist board IPs server-side for process control
+    fetch("/api/camera/boards", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        safetyIp:   c.safetyIp   || c.ip,
+        wristIp:    c.wristIp    || c.ip,
+        skeletonIp: c.skeletonIp || c.ip,
+        agentPort:  c.agentPort,
+      }),
+    }).catch(() => {});
     setApplied(true);
     setTimeout(() => setApplied(false), 2500);
   };
@@ -161,14 +183,15 @@ function ConnectionBar({ config, onApply }: { config: JetsonConfig; onApply: (c:
 
   return (
     <div className="shrink-0 border-b border-black/5 dark:border-white/5 bg-blue-50/60 dark:bg-blue-950/20">
-      <div className="flex items-center gap-3 px-6 py-2.5">
+      {/* ── Row 1: Main ROS IP + port toggles + apply ── */}
+      <div className="flex items-center gap-3 px-6 py-2.5 flex-wrap">
         <Server size={13} className="text-blue-500 shrink-0" />
-        <span className="text-[11px] font-black text-blue-600 dark:text-blue-400 shrink-0">Jetson / ROS Host</span>
+        <span className="text-[11px] font-black text-blue-600 dark:text-blue-400 shrink-0">ROS / Default</span>
         <input
           type="text" value={ip} onChange={(e) => setIp(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && apply()}
-          placeholder="localhost หรือ 192.168.x.x"
-          className={`${inputCls} w-48`}
+          placeholder="192.168.x.x"
+          className={`${inputCls} w-40`}
         />
         <button
           onClick={() => setShowPorts((o) => !o)}
@@ -188,8 +211,20 @@ function ConnectionBar({ config, onApply }: { config: JetsonConfig; onApply: (c:
             <input type="number" value={safetyPort} onChange={(e) => setSafetyPort(+e.target.value)} className={`${inputCls} w-16`} />
             <span className="text-[10px] text-gray-400">Wrist</span>
             <input type="number" value={wristPort}  onChange={(e) => setWristPort(+e.target.value)}  className={`${inputCls} w-16`} />
+            <span className="text-[10px] text-gray-400">Agent</span>
+            <input type="number" value={agentPort}  onChange={(e) => setAgentPort(+e.target.value)}  className={`${inputCls} w-16`} />
           </div>
         )}
+        <button
+          onClick={() => setShowBoards((o) => !o)}
+          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-black transition-colors ${
+            showBoards ? "bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300"
+                       : "bg-gray-100 dark:bg-[#1a2540] text-gray-500 hover:text-gray-700"
+          }`}
+        >
+          <Settings size={10} /> Per-Board IPs
+          <ChevronDown size={9} className={`transition-transform ${showBoards ? "rotate-180" : ""}`} />
+        </button>
         <button
           onClick={apply}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-black transition-all shrink-0 ${
@@ -202,11 +237,49 @@ function ConnectionBar({ config, onApply }: { config: JetsonConfig; onApply: (c:
         <div className="ml-auto hidden xl:flex items-center gap-2 text-[10px] font-mono text-gray-400 dark:text-gray-600">
           <span>ws://{ip}:{rosPort}</span>
           <span className="opacity-40">·</span>
-          <span>:{safetyPort}</span>
+          <span>Safety:{safetyPort}</span>
           <span className="opacity-40">·</span>
-          <span>:{wristPort}</span>
+          <span>Wrist:{wristPort}</span>
         </div>
       </div>
+
+      {/* ── Row 2: Per-board IP overrides (collapsible) ── */}
+      {showBoards && (
+        <div className="flex items-center gap-4 px-6 pb-2.5 flex-wrap border-t border-blue-100 dark:border-blue-900/30 pt-2">
+          <span className="text-[10px] font-black text-gray-500 uppercase shrink-0">Board IPs</span>
+          <span className="text-[9px] text-gray-400 shrink-0">(ว่าง = ใช้ IP หลัก)</span>
+
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] font-black text-blue-500 shrink-0 w-20">Safety Cam</span>
+            <input
+              type="text" value={safetyIp} onChange={(e) => setSafetyIp(e.target.value)}
+              placeholder={ip || "192.168.x.x"}
+              className={`${inputCls} w-36`}
+            />
+            <span className="text-[9px] text-gray-400">:8765 · :5050</span>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] font-black text-indigo-500 shrink-0 w-20">Wrist Cam</span>
+            <input
+              type="text" value={wristIp} onChange={(e) => setWristIp(e.target.value)}
+              placeholder={ip || "192.168.x.x"}
+              className={`${inputCls} w-36`}
+            />
+            <span className="text-[9px] text-gray-400">:8766 · :5050</span>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] font-black text-purple-500 shrink-0 w-20">Skeleton</span>
+            <input
+              type="text" value={skeletonIp} onChange={(e) => setSkeletonIp(e.target.value)}
+              placeholder={ip || "192.168.x.x"}
+              className={`${inputCls} w-36`}
+            />
+            <span className="text-[9px] text-gray-400">:8767 · :5050</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1146,7 +1219,7 @@ function CameraAssignBar({
 
 export default function CameraSetupPage() {
   // Use safe SSR defaults first, then load localStorage after hydration
-  const [config, setConfig]              = useState<JetsonConfig>({ ip: "localhost", rosPort: 9090, safetyPort: 8765, wristPort: 8766, skeletonPort: 8767 });
+  const [config, setConfig]              = useState<JetsonConfig>({ ip: "localhost", rosPort: 9090, safetyPort: 8765, wristPort: 8766, skeletonPort: 8767, agentPort: 5050 });
   const [camCfg, setCamCfg]              = useState<CameraConfig>({ safetyLeft: -1, safetyRight: -1, wrist: -1, safetyEnabled: false, wristEnabled: false });
   const [safetyRestart, setSafetyRestart] = useState(0);
   const [wristRestart,  setWristRestart]  = useState(0);
@@ -1161,6 +1234,7 @@ export default function CameraSetupPage() {
   const handleApplyConfig = (cfg: JetsonConfig) => {
     saveJetsonConfig(cfg);
     setConfig(cfg);
+    // The ConnectionBar already POSTs to /api/camera/boards; this is a no-op mirror.
   };
 
   const handleSafetyToggle = (v: boolean) => {
@@ -1175,8 +1249,8 @@ export default function CameraSetupPage() {
     saveCameraConfig(newCfg);
   };
 
-  const wsSafetyUrl = makeWsUrl(config.ip, config.safetyPort);
-  const wsWristUrl  = makeWsUrl(config.ip, config.wristPort);
+  const wsSafetyUrl = makeWsUrl(getBoardIp(config, "safety"),  config.safetyPort);
+  const wsWristUrl  = makeWsUrl(getBoardIp(config, "wrist"),   config.wristPort);
 
   return (
     <div className="h-screen flex flex-col bg-[#F5F5F7] dark:bg-[#070d1b]">
