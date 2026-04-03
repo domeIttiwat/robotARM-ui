@@ -11,8 +11,8 @@ import * as ROSLIB from "roslib";
 import { loadJetsonConfig, makeWsUrl } from "@/lib/jetsonConfig";
 
 export interface CalibrationData {
-  offsets: number[];  // [j1, j2, j3, j4, j5, j6, rail, gripper]
-  flips: boolean[];   // [j1, j2, j3, j4, j5, j6, rail, gripper]
+  offsets: number[];  // [joint_1, joint_2, joint_3, joint_4, joint_5, joint_6, slider_joint, gripper]
+  flips: boolean[];   // [joint_1, joint_2, joint_3, joint_4, joint_5, joint_6, slider_joint, gripper]
   tcpOffset: { x: number; y: number; z: number };  // Tool center point offset in mm
   tcpFlips: { x: boolean; y: boolean; z: boolean }; // Flip sign of each TCP axis
 }
@@ -165,10 +165,11 @@ export const RosProvider = ({ children }: { children: React.ReactNode }) => {
           const idx = (name: string) => (m.name as string[]).indexOf(name);
 
           // joint_1 … joint_6 → indices 0-5 in our state array
+          // ROS standard: position is in radians → convert to degrees for UI/DB
           const joints = (["joint_1","joint_2","joint_3","joint_4","joint_5","joint_6"] as const)
             .map((jn, i) => {
               const pos = idx(jn);
-              return pos >= 0 ? applyForward(m.position[pos], i, cal) : 0;
+              return pos >= 0 ? applyForward(m.position[pos] * (180 / Math.PI), i, cal) : 0;
             });
           setJointStates(joints);
 
@@ -288,13 +289,13 @@ export const RosProvider = ({ children }: { children: React.ReactNode }) => {
       }
       const rawTasks = jobData.tasks?.map((task: any) => ({
         ...task,
-        j1: applyInverse(task.j1, 0),
-        j2: applyInverse(task.j2, 1),
-        j3: applyInverse(task.j3, 2),
-        j4: applyInverse(task.j4, 3),
-        j5: applyInverse(task.j5, 4),
-        j6: applyInverse(task.j6, 5),
-        rail: applyInverse(task.rail, 6),
+        joint_1: applyInverse(task.joint_1, 0),
+        joint_2: applyInverse(task.joint_2, 1),
+        joint_3: applyInverse(task.joint_3, 2),
+        joint_4: applyInverse(task.joint_4, 3),
+        joint_5: applyInverse(task.joint_5, 4),
+        joint_6: applyInverse(task.joint_6, 5),
+        slider_joint: applyInverse(task.slider_joint, 6),
         gripper: applyInverse(task.gripper, 7),
       }));
       const payload = { ...jobData, tasks: rawTasks };
@@ -319,13 +320,13 @@ export const RosProvider = ({ children }: { children: React.ReactNode }) => {
       const cal = calibrationRef.current;
       const rawTask = {
         ...taskData,
-        j1: applyInverse(taskData.j1, 0),
-        j2: applyInverse(taskData.j2, 1),
-        j3: applyInverse(taskData.j3, 2),
-        j4: applyInverse(taskData.j4, 3),
-        j5: applyInverse(taskData.j5, 4),
-        j6: applyInverse(taskData.j6, 5),
-        rail: applyInverse(taskData.rail, 6),
+        joint_1: applyInverse(taskData.joint_1, 0),
+        joint_2: applyInverse(taskData.joint_2, 1),
+        joint_3: applyInverse(taskData.joint_3, 2),
+        joint_4: applyInverse(taskData.joint_4, 3),
+        joint_5: applyInverse(taskData.joint_5, 4),
+        joint_6: applyInverse(taskData.joint_6, 5),
+        slider_joint: applyInverse(taskData.slider_joint, 6),
         gripper: applyInverse(taskData.gripper, 7),
         // Effector mode: include Cartesian target for robot IK
         ...(taskData.controlMode === "effector" && taskData.x != null && {

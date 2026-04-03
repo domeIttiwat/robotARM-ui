@@ -7,20 +7,20 @@ export async function PATCH(
 ) {
   try {
     const { taskId } = await params;
-    const { label, sequence, j1, j2, j3, j4, j5, j6, rail, speed, delay, gripper, controlMode, x, y, z, roll, pitch, yaw, taskType, planningMode } = await req.json();
+    const { label, sequence, joint_1, joint_2, joint_3, joint_4, joint_5, joint_6, slider_joint, speed, delay, gripper, controlMode, x, y, z, roll, pitch, yaw, taskType, planningMode } = await req.json();
 
     const task = await prisma.task.update({
       where: { id: parseInt(taskId) },
       data: {
         ...(label !== undefined && { label: label ?? null }),
         ...(sequence !== undefined && { sequence }),
-        ...(j1 !== undefined && { j1 }),
-        ...(j2 !== undefined && { j2 }),
-        ...(j3 !== undefined && { j3 }),
-        ...(j4 !== undefined && { j4 }),
-        ...(j5 !== undefined && { j5 }),
-        ...(j6 !== undefined && { j6 }),
-        ...(rail !== undefined && { rail }),
+        ...(joint_1 !== undefined && { joint_1 }),
+        ...(joint_2 !== undefined && { joint_2 }),
+        ...(joint_3 !== undefined && { joint_3 }),
+        ...(joint_4 !== undefined && { joint_4 }),
+        ...(joint_5 !== undefined && { joint_5 }),
+        ...(joint_6 !== undefined && { joint_6 }),
+        ...(slider_joint !== undefined && { slider_joint }),
         ...(speed !== undefined && { speed }),
         ...(delay !== undefined && { delay }),
         ...(gripper !== undefined && { gripper }),

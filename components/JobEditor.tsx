@@ -58,8 +58,8 @@ import { CSS } from "@dnd-kit/utilities";
 interface SavedPosition {
   id: number;
   name: string;
-  j1: number; j2: number; j3: number; j4: number; j5: number; j6: number;
-  rail: number;
+  joint_1: number; joint_2: number; joint_3: number; joint_4: number; joint_5: number; joint_6: number;
+  slider_joint: number;
   gripper: number;
   controlMode: string;
   x?: number | null; y?: number | null; z?: number | null;
@@ -70,13 +70,13 @@ interface Task {
   id: number;
   sequence: number;
   label?: string;
-  j1: number;
-  j2: number;
-  j3: number;
-  j4: number;
-  j5: number;
-  j6: number;
-  rail: number;
+  joint_1: number;
+  joint_2: number;
+  joint_3: number;
+  joint_4: number;
+  joint_5: number;
+  joint_6: number;
+  slider_joint: number;
   speed?: number;
   delay?: number;
   gripper?: number;
@@ -256,7 +256,7 @@ function SortableTaskCard({
               J1-J3
             </span>
             <span className="font-mono font-bold text-xs truncate">
-              {task.j1.toFixed(1)}°/{task.j2.toFixed(1)}°/{task.j3.toFixed(1)}°
+              {task.joint_1.toFixed(1)}°/{task.joint_2.toFixed(1)}°/{task.joint_3.toFixed(1)}°
             </span>
           </div>
           <div className="flex items-center gap-2 min-w-0">
@@ -265,7 +265,7 @@ function SortableTaskCard({
               J4-J6
             </span>
             <span className="font-mono font-bold text-xs truncate">
-              {task.j4.toFixed(1)}°/{task.j5.toFixed(1)}°/{task.j6.toFixed(1)}°
+              {task.joint_4.toFixed(1)}°/{task.joint_5.toFixed(1)}°/{task.joint_6.toFixed(1)}°
             </span>
           </div>
           <div className="flex items-center gap-2">
@@ -274,7 +274,7 @@ function SortableTaskCard({
               Rail
             </span>
             <span className="font-mono font-bold text-xs">
-              {task.rail.toFixed(1)} mm
+              {task.slider_joint.toFixed(1)} mm
             </span>
           </div>
           <div className="flex items-center gap-2">
@@ -490,8 +490,8 @@ export default function JobEditor({
       id: Date.now(),
       sequence: tasks.length + 1,
       label: pos.name,
-      j1: pos.j1, j2: pos.j2, j3: pos.j3, j4: pos.j4, j5: pos.j5, j6: pos.j6,
-      rail: pos.rail,
+      joint_1: pos.joint_1, joint_2: pos.joint_2, joint_3: pos.joint_3, joint_4: pos.joint_4, joint_5: pos.joint_5, joint_6: pos.joint_6,
+      slider_joint: pos.slider_joint,
       gripper: pos.gripper,
       speed: 50,
       delay: 0,
@@ -529,8 +529,8 @@ export default function JobEditor({
       id: Date.now(),
       sequence: tasks.length + 1,
       label: planningTaskLabel || `Planning ${tasks.length + 1}`,
-      j1: 0, j2: 0, j3: 0, j4: 0, j5: 0, j6: 0,
-      rail: 0,
+      joint_1: 0, joint_2: 0, joint_3: 0, joint_4: 0, joint_5: 0, joint_6: 0,
+      slider_joint: 0,
       gripper: 0,
       speed: 50,
       delay: 0,
@@ -551,13 +551,13 @@ export default function JobEditor({
       id: Date.now(),
       sequence: tasks.length + 1,
       label: captureLabel || `Task ${tasks.length + 1}`,
-      j1: jointStates[0],
-      j2: jointStates[1],
-      j3: jointStates[2],
-      j4: jointStates[3],
-      j5: jointStates[4],
-      j6: jointStates[5],
-      rail: railPos,
+      joint_1: jointStates[0],
+      joint_2: jointStates[1],
+      joint_3: jointStates[2],
+      joint_4: jointStates[3],
+      joint_5: jointStates[4],
+      joint_6: jointStates[5],
+      slider_joint: railPos,
       gripper: gripperPos,
       speed: 50,
       delay: 2000,
@@ -609,13 +609,13 @@ export default function JobEditor({
         i === index
           ? {
               ...t,
-              j1: jointStates[0],
-              j2: jointStates[1],
-              j3: jointStates[2],
-              j4: jointStates[3],
-              j5: jointStates[4],
-              j6: jointStates[5],
-              rail: railPos,
+              joint_1: jointStates[0],
+              joint_2: jointStates[1],
+              joint_3: jointStates[2],
+              joint_4: jointStates[3],
+              joint_5: jointStates[4],
+              joint_6: jointStates[5],
+              slider_joint: railPos,
               gripper: gripperPos,
               x: effectorPose.x,
               y: effectorPose.y,
@@ -639,13 +639,13 @@ export default function JobEditor({
     sendGotoPosition({
       sequence: task.sequence,
       label: task.label,
-      j1: task.j1,
-      j2: task.j2,
-      j3: task.j3,
-      j4: task.j4,
-      j5: task.j5,
-      j6: task.j6,
-      rail: task.rail,
+      joint_1: task.joint_1,
+      joint_2: task.joint_2,
+      joint_3: task.joint_3,
+      joint_4: task.joint_4,
+      joint_5: task.joint_5,
+      joint_6: task.joint_6,
+      slider_joint: task.slider_joint,
       speed: task.speed ?? 50,
       gripper: task.gripper ?? 0,
     });
@@ -664,9 +664,9 @@ export default function JobEditor({
       sendGotoPosition({
         sequence: i + 1,
         label: task.label,
-        j1: task.j1, j2: task.j2, j3: task.j3,
-        j4: task.j4, j5: task.j5, j6: task.j6,
-        rail: task.rail,
+        joint_1: task.joint_1, joint_2: task.joint_2, joint_3: task.joint_3,
+        joint_4: task.joint_4, joint_5: task.joint_5, joint_6: task.joint_6,
+        slider_joint: task.slider_joint,
         speed: task.speed ?? 50,
         gripper: task.gripper ?? 0,
       });
@@ -782,9 +782,9 @@ export default function JobEditor({
             const body = JSON.stringify({
               label: t.label,
               sequence: i + 1,
-              j1: t.j1, j2: t.j2, j3: t.j3,
-              j4: t.j4, j5: t.j5, j6: t.j6,
-              rail: t.rail,
+              joint_1: t.joint_1, joint_2: t.joint_2, joint_3: t.joint_3,
+              joint_4: t.joint_4, joint_5: t.joint_5, joint_6: t.joint_6,
+              slider_joint: t.slider_joint,
               speed: t.speed ?? 50,
               delay: t.delay ?? 0,
               gripper: t.gripper ?? 0,
@@ -830,7 +830,7 @@ export default function JobEditor({
         <RosStatusBadge />
         <div className="flex gap-4">
           <button
-            onClick={() => sendGotoPosition({ sequence: 0, label: "Home", j1: 0, j2: 0, j3: 0, j4: 0, j5: 0, j6: 0, rail: 0, speed: 20, gripper: 0 })}
+            onClick={() => sendGotoPosition({ sequence: 0, label: "Home", joint_1: 0, joint_2: 0, joint_3: 0, joint_4: 0, joint_5: 0, joint_6: 0, slider_joint: 0, speed: 20, gripper: 0 })}
             disabled={dryRunIdx >= 0}
             className="p-3 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-colors disabled:opacity-30"
             title="ส่งหุ่นยนต์กลับตำแหน่ง Home (ทุก Joint = 0)"
@@ -934,7 +934,7 @@ export default function JobEditor({
                       <div className="flex-1 min-w-0">
                         <p className="font-bold text-sm truncate">{pos.name}</p>
                         <p className="text-[10px] text-gray-400 font-mono">
-                          {pos.j1.toFixed(0)}° {pos.j2.toFixed(0)}° {pos.j3.toFixed(0)}°…
+                          {pos.joint_1.toFixed(0)}° {pos.joint_2.toFixed(0)}° {pos.joint_3.toFixed(0)}°…
                         </p>
                       </div>
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${pos.controlMode === "effector" ? "bg-purple-100 text-purple-700" : "bg-gray-100 text-gray-500"}`}>
@@ -1028,16 +1028,16 @@ export default function JobEditor({
                     <div className="text-xs font-mono font-bold text-gray-400 uppercase hidden lg:block">
                       J:{" "}
                       {[
-                        activeTask.j1,
-                        activeTask.j2,
-                        activeTask.j3,
-                        activeTask.j4,
-                        activeTask.j5,
-                        activeTask.j6,
+                        activeTask.joint_1,
+                        activeTask.joint_2,
+                        activeTask.joint_3,
+                        activeTask.joint_4,
+                        activeTask.joint_5,
+                        activeTask.joint_6,
                       ]
                         .map((v) => v.toFixed(0))
                         .join(", ")}{" "}
-                      | R: {activeTask.rail.toFixed(0)}mm
+                      | R: {activeTask.slider_joint.toFixed(0)}mm
                     </div>
                   </div>
                 ) : null}
@@ -1091,9 +1091,9 @@ export default function JobEditor({
           sequence: taskJsonIdx + 1,
           label: t.label ?? `Task ${taskJsonIdx + 1}`,
           controlMode: mode,
-          j1: t.j1, j2: t.j2, j3: t.j3,
-          j4: t.j4, j5: t.j5, j6: t.j6,
-          rail: t.rail,
+          joint_1: t.joint_1, joint_2: t.joint_2, joint_3: t.joint_3,
+          joint_4: t.joint_4, joint_5: t.joint_5, joint_6: t.joint_6,
+          slider_joint: t.slider_joint,
           speed: t.speed ?? 50,
           delay: t.delay ?? 0,
           gripper: t.gripper ?? 0,

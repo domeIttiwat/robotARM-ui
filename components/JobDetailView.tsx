@@ -42,13 +42,13 @@ interface Task {
   id: number;
   sequence: number;
   label?: string;
-  j1: number;
-  j2: number;
-  j3: number;
-  j4: number;
-  j5: number;
-  j6: number;
-  rail: number;
+  joint_1: number;
+  joint_2: number;
+  joint_3: number;
+  joint_4: number;
+  joint_5: number;
+  joint_6: number;
+  slider_joint: number;
   speed?: number;
   delay?: number;
   gripper?: number;
@@ -91,18 +91,18 @@ const formatTime = (ms: number) => {
 // Rail: 600mm full range at 100% speed ~3 seconds.
 const estimateTaskTime = (task: Task, prevTask?: Task): number => {
   const speed = Math.max(1, task.speed || 50) / 100;
-  const prev = prevTask ?? { j1: 0, j2: 0, j3: 0, j4: 0, j5: 0, j6: 0, rail: 0 };
+  const prev = prevTask ?? { joint_1: 0, joint_2: 0, joint_3: 0, joint_4: 0, joint_5: 0, joint_6: 0, slider_joint: 0 };
 
   const jointDeltas = [
-    Math.abs(task.j1 - prev.j1),
-    Math.abs(task.j2 - prev.j2),
-    Math.abs(task.j3 - prev.j3),
-    Math.abs(task.j4 - prev.j4),
-    Math.abs(task.j5 - prev.j5),
-    Math.abs(task.j6 - prev.j6),
+    Math.abs(task.joint_1 - prev.joint_1),
+    Math.abs(task.joint_2 - prev.joint_2),
+    Math.abs(task.joint_3 - prev.joint_3),
+    Math.abs(task.joint_4 - prev.joint_4),
+    Math.abs(task.joint_5 - prev.joint_5),
+    Math.abs(task.joint_6 - prev.joint_6),
   ];
   const maxJointDelta = Math.max(...jointDeltas);
-  const railDelta = Math.abs(task.rail - prev.rail);
+  const railDelta = Math.abs(task.slider_joint - prev.slider_joint);
 
   // movement time = proportional to largest motion / speed
   const jointTime = (maxJointDelta / 180) * 3000 / speed;
@@ -125,9 +125,9 @@ const calcTaskProgress = (
   joints: number[],
   rail: number
 ): number => {
-  const prev = prevTask ?? { j1: 0, j2: 0, j3: 0, j4: 0, j5: 0, j6: 0, rail: 0 };
-  const targets  = [task.j1, task.j2, task.j3, task.j4, task.j5, task.j6, task.rail];
-  const starts   = [prev.j1, prev.j2, prev.j3, prev.j4, prev.j5, prev.j6, prev.rail];
+  const prev = prevTask ?? { joint_1: 0, joint_2: 0, joint_3: 0, joint_4: 0, joint_5: 0, joint_6: 0, slider_joint: 0 };
+  const targets  = [task.joint_1, task.joint_2, task.joint_3, task.joint_4, task.joint_5, task.joint_6, task.slider_joint];
+  const starts   = [prev.joint_1, prev.joint_2, prev.joint_3, prev.joint_4, prev.joint_5, prev.joint_6, prev.slider_joint];
   const currents = [...joints.slice(0, 6), rail];
 
   let maxDelta = 0;
@@ -288,9 +288,9 @@ export default function JobDetailView({ job, onBack, onUpdate, autoStart = false
         sequence: t.sequence,
         label: t.label ?? `Task ${t.sequence}`,
         controlMode: mode,
-        j1: t.j1, j2: t.j2, j3: t.j3,
-        j4: t.j4, j5: t.j5, j6: t.j6,
-        rail: t.rail,
+        joint_1: t.joint_1, joint_2: t.joint_2, joint_3: t.joint_3,
+        joint_4: t.joint_4, joint_5: t.joint_5, joint_6: t.joint_6,
+        slider_joint: t.slider_joint,
         speed: t.speed ?? 50,
         delay: t.delay ?? 0,
         gripper: t.gripper ?? 0,
@@ -443,9 +443,9 @@ export default function JobDetailView({ job, onBack, onUpdate, autoStart = false
         sendGotoPosition({
           sequence: task.sequence,
           label: task.label ?? `Task ${task.sequence}`,
-          j1: task.j1, j2: task.j2, j3: task.j3,
-          j4: task.j4, j5: task.j5, j6: task.j6,
-          rail: task.rail,
+          joint_1: task.joint_1, joint_2: task.joint_2, joint_3: task.joint_3,
+          joint_4: task.joint_4, joint_5: task.joint_5, joint_6: task.joint_6,
+          slider_joint: task.slider_joint,
           speed: task.speed ?? 50,
           gripper: task.gripper ?? 0,
           controlMode,
@@ -489,7 +489,7 @@ export default function JobDetailView({ job, onBack, onUpdate, autoStart = false
       setTotalElapsedMs(elapsed);
       setShowCompletionModal(true);
       if (autoHomeOnComplete) {
-        sendGotoPosition({ sequence: 0, label: "Home", j1: 0, j2: 0, j3: 0, j4: 0, j5: 0, j6: 0, rail: 0, speed: 20, gripper: 0 });
+        sendGotoPosition({ sequence: 0, label: "Home", joint_1: 0, joint_2: 0, joint_3: 0, joint_4: 0, joint_5: 0, joint_6: 0, slider_joint: 0, speed: 20, gripper: 0 });
       }
       setTimeout(() => {
         setShowCompletionModal(false);
@@ -853,20 +853,20 @@ export default function JobDetailView({ job, onBack, onUpdate, autoStart = false
                   <RotateCcw size={10} className="opacity-50 shrink-0" />
                   <span className="font-black opacity-50 w-8 shrink-0">J1-J3</span>
                   <span className="font-mono truncate">
-                    {task.j1.toFixed(1)}°/{task.j2.toFixed(1)}°/{task.j3.toFixed(1)}°
+                    {task.joint_1.toFixed(1)}°/{task.joint_2.toFixed(1)}°/{task.joint_3.toFixed(1)}°
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5 min-w-0">
                   <RotateCcw size={10} className="opacity-50 shrink-0" />
                   <span className="font-black opacity-50 w-8 shrink-0">J4-J6</span>
                   <span className="font-mono truncate">
-                    {task.j4.toFixed(1)}°/{task.j5.toFixed(1)}°/{task.j6.toFixed(1)}°
+                    {task.joint_4.toFixed(1)}°/{task.joint_5.toFixed(1)}°/{task.joint_6.toFixed(1)}°
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <MoveHorizontal size={10} className="opacity-50 shrink-0" />
                   <span className="font-black opacity-50 w-8 shrink-0">Rail</span>
-                  <span className="font-mono">{task.rail.toFixed(1)} mm</span>
+                  <span className="font-mono">{task.slider_joint.toFixed(1)} mm</span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <Hand size={10} className="opacity-50 shrink-0" />

@@ -22,13 +22,13 @@ interface Task {
   id: number;
   sequence: number;
   label?: string;
-  j1: number;
-  j2: number;
-  j3: number;
-  j4: number;
-  j5: number;
-  j6: number;
-  rail: number;
+  joint_1: number;
+  joint_2: number;
+  joint_3: number;
+  joint_4: number;
+  joint_5: number;
+  joint_6: number;
+  slider_joint: number;
   speed?: number;
   delay?: number;
   gripper?: number;
@@ -134,7 +134,7 @@ const Dashboard = ({
             <Camera size={22} />
           </Link>
           <button
-            onClick={() => sendGotoPosition({ sequence: 0, label: "Home", j1: 0, j2: 0, j3: 0, j4: 0, j5: 0, j6: 0, rail: 0, speed: 20, gripper: 0 })}
+            onClick={() => sendGotoPosition({ sequence: 0, label: "Home", joint_1: 0, joint_2: 0, joint_3: 0, joint_4: 0, joint_5: 0, joint_6: 0, slider_joint: 0, speed: 20, gripper: 0 })}
             className="flex items-center gap-3 px-8 py-5 bg-black hover:bg-gray-800 active:bg-gray-900 text-white rounded-2xl transition-colors font-black text-lg shadow-lg"
             title="ส่งหุ่นยนต์กลับตำแหน่ง Home"
           >

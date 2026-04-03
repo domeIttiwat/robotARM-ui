@@ -8,14 +8,14 @@ type Tab = "joint" | "effector";
 const JOG_INTERVAL_MS = 100;
 
 const JOINT_AXES = [
-  { key: "j1",      label: "J1",      unit: "°",  color: "bg-gray-100 text-gray-700"     },
-  { key: "j2",      label: "J2",      unit: "°",  color: "bg-gray-100 text-gray-700"     },
-  { key: "j3",      label: "J3",      unit: "°",  color: "bg-gray-100 text-gray-700"     },
-  { key: "j4",      label: "J4",      unit: "°",  color: "bg-gray-100 text-gray-700"     },
-  { key: "j5",      label: "J5",      unit: "°",  color: "bg-gray-100 text-gray-700"     },
-  { key: "j6",      label: "J6",      unit: "°",  color: "bg-gray-100 text-gray-700"     },
-  { key: "rail",    label: "Rail",    unit: "mm", color: "bg-blue-100 text-blue-700"     },
-  { key: "gripper", label: "Gripper", unit: "%",  color: "bg-orange-100 text-orange-700" },
+  { key: "joint_1",      label: "J1",      unit: "°",  color: "bg-gray-100 text-gray-700"     },
+  { key: "joint_2",      label: "J2",      unit: "°",  color: "bg-gray-100 text-gray-700"     },
+  { key: "joint_3",      label: "J3",      unit: "°",  color: "bg-gray-100 text-gray-700"     },
+  { key: "joint_4",      label: "J4",      unit: "°",  color: "bg-gray-100 text-gray-700"     },
+  { key: "joint_5",      label: "J5",      unit: "°",  color: "bg-gray-100 text-gray-700"     },
+  { key: "joint_6",      label: "J6",      unit: "°",  color: "bg-gray-100 text-gray-700"     },
+  { key: "slider_joint", label: "Rail",    unit: "mm", color: "bg-blue-100 text-blue-700"     },
+  { key: "gripper",      label: "Gripper", unit: "%",  color: "bg-orange-100 text-orange-700" },
 ] as const;
 
 type JointKey = typeof JOINT_AXES[number]["key"];
@@ -140,8 +140,8 @@ export default function JogControlPanel({ onClose, mode = "modal" }: { onClose: 
   const sendHome = useCallback(() => {
     const cmd = {
       controlMode: "joint",
-      j1: 0, j2: 0, j3: 0, j4: 0, j5: 0, j6: 0,
-      rail: 0, gripper: 0,
+      joint_1: 0, joint_2: 0, joint_3: 0, joint_4: 0, joint_5: 0, joint_6: 0,
+      slider_joint: 0, gripper: 0,
       speed: speedRef.current,
       sequence: 0, label: "home",
     };
@@ -150,9 +150,9 @@ export default function JogControlPanel({ onClose, mode = "modal" }: { onClose: 
   }, [sendGotoPosition, pushLog]);
 
   const jointValue = (key: JointKey): number => {
-    if (key === "rail")    return railPos;
-    if (key === "gripper") return gripperPos;
-    return jointStates[parseInt(key[1]) - 1] ?? 0;
+    if (key === "slider_joint") return railPos;
+    if (key === "gripper")      return gripperPos;
+    return jointStates[parseInt(key[key.length - 1]) - 1] ?? 0;
   };
 
   const panelContent = (

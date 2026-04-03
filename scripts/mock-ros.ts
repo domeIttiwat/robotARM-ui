@@ -63,12 +63,24 @@ function publishTopic(topic: string, data: number) {
 function publishJointStates(positions: number[]) {
   const subs = subscribers.get("/joint_states");
   if (!subs || subs.size === 0) return;
+  // ROS standard: publish joint angles in radians; rail (mm) and gripper (%) stay as-is
+  const DEG2RAD = Math.PI / 180;
+  const rosPositions = [
+    positions[0] * DEG2RAD,
+    positions[1] * DEG2RAD,
+    positions[2] * DEG2RAD,
+    positions[3] * DEG2RAD,
+    positions[4] * DEG2RAD,
+    positions[5] * DEG2RAD,
+    positions[6], // slider_joint: mm
+    positions[7], // gripper: %
+  ];
   const payload = JSON.stringify({
     op: "publish",
     topic: "/joint_states",
     msg: {
-      name: ["j1", "j2", "j3", "j4", "j5", "j6", "rail", "gripper"],
-      position: positions,
+      name: ["joint_1", "joint_2", "joint_3", "joint_4", "joint_5", "joint_6", "slider_joint", "gripper"],
+      position: rosPositions,
       velocity: [0, 0, 0, 0, 0, 0],
     },
   });
@@ -152,16 +164,16 @@ function handleGotoPositionMock(taskData: any) {
     if (result) {
       mockJointPositions = [
         ...result,
-        taskData.rail    ?? mockJointPositions[6],
-        taskData.gripper ?? mockJointPositions[7],
+        taskData.slider_joint ?? mockJointPositions[6],
+        taskData.gripper      ?? mockJointPositions[7],
       ];
     }
     // else: IK failed (singularity/out-of-reach) — keep current position
   } else {
     mockJointPositions = [
-      taskData.j1 ?? 0, taskData.j2 ?? 0, taskData.j3 ?? 0,
-      taskData.j4 ?? 0, taskData.j5 ?? 0, taskData.j6 ?? 0,
-      taskData.rail ?? 0, taskData.gripper ?? 0,
+      taskData.joint_1 ?? 0, taskData.joint_2 ?? 0, taskData.joint_3 ?? 0,
+      taskData.joint_4 ?? 0, taskData.joint_5 ?? 0, taskData.joint_6 ?? 0,
+      taskData.slider_joint ?? 0, taskData.gripper ?? 0,
     ];
   }
 

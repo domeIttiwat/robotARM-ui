@@ -13,8 +13,8 @@ import {
 interface SavedPosition {
   id: number;
   name: string;
-  j1: number; j2: number; j3: number; j4: number; j5: number; j6: number;
-  rail: number;
+  joint_1: number; joint_2: number; joint_3: number; joint_4: number; joint_5: number; joint_6: number;
+  slider_joint: number;
   gripper: number;
   controlMode: string;
   x?: number | null; y?: number | null; z?: number | null;
@@ -69,9 +69,9 @@ export default function PositionEditor({ onClose }: Props) {
     try {
       const body: any = {
         name: posName.trim(),
-        j1: jointStates[0], j2: jointStates[1], j3: jointStates[2],
-        j4: jointStates[3], j5: jointStates[4], j6: jointStates[5],
-        rail: railPos,
+        joint_1: jointStates[0], joint_2: jointStates[1], joint_3: jointStates[2],
+        joint_4: jointStates[3], joint_5: jointStates[4], joint_6: jointStates[5],
+        slider_joint: railPos,
         gripper: gripperPos,
         controlMode,
         x: effectorPose.x, y: effectorPose.y, z: effectorPose.z,
@@ -113,8 +113,8 @@ export default function PositionEditor({ onClose }: Props) {
     setTeachMode(false);
     sendGotoPosition({
       sequence: 0, label: pos.name,
-      j1: pos.j1, j2: pos.j2, j3: pos.j3, j4: pos.j4, j5: pos.j5, j6: pos.j6,
-      rail: pos.rail, speed: 30, gripper: pos.gripper,
+      joint_1: pos.joint_1, joint_2: pos.joint_2, joint_3: pos.joint_3, joint_4: pos.joint_4, joint_5: pos.joint_5, joint_6: pos.joint_6,
+      slider_joint: pos.slider_joint, speed: 30, gripper: pos.gripper,
       controlMode: pos.controlMode,
       ...(pos.controlMode === "effector" && pos.x != null && {
         x: pos.x, y: pos.y, z: pos.z,
@@ -227,7 +227,7 @@ export default function PositionEditor({ onClose }: Props) {
                 <div className="flex-1 min-w-0">
                   <p className="font-black text-sm truncate">{pos.name}</p>
                   <p className="text-[10px] text-gray-400 font-mono">
-                    J: {pos.j1.toFixed(0)}° {pos.j2.toFixed(0)}° {pos.j3.toFixed(0)}° {pos.j4.toFixed(0)}° {pos.j5.toFixed(0)}° {pos.j6.toFixed(0)}°
+                    J: {pos.joint_1.toFixed(0)}° {pos.joint_2.toFixed(0)}° {pos.joint_3.toFixed(0)}° {pos.joint_4.toFixed(0)}° {pos.joint_5.toFixed(0)}° {pos.joint_6.toFixed(0)}°
                   </p>
                 </div>
                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${pos.controlMode === "effector" ? "bg-purple-100 text-purple-700" : "bg-gray-100 text-gray-500"}`}>

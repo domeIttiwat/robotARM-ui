@@ -33,7 +33,7 @@ export async function POST(
   try {
     const { id } = await params;
     const jobId = parseInt(id);
-    const { sequence, label, j1, j2, j3, j4, j5, j6, rail, speed, delay, gripper, controlMode, x, y, z, roll, pitch, yaw, taskType, planningMode } =
+    const { sequence, label, joint_1, joint_2, joint_3, joint_4, joint_5, joint_6, slider_joint, speed, delay, gripper, controlMode, x, y, z, roll, pitch, yaw, taskType, planningMode } =
       await req.json();
 
     const task = await prisma.task.create({
@@ -41,9 +41,9 @@ export async function POST(
         jobId,
         sequence,
         label: label || null,
-        j1: j1 ?? 0, j2: j2 ?? 0, j3: j3 ?? 0,
-        j4: j4 ?? 0, j5: j5 ?? 0, j6: j6 ?? 0,
-        rail: rail ?? 0,
+        joint_1: joint_1 ?? 0, joint_2: joint_2 ?? 0, joint_3: joint_3 ?? 0,
+        joint_4: joint_4 ?? 0, joint_5: joint_5 ?? 0, joint_6: joint_6 ?? 0,
+        slider_joint: slider_joint ?? 0,
         speed: speed || 50,
         delay: delay || 0,
         gripper: gripper ?? 0,
