@@ -28,6 +28,10 @@ export interface ViewerSettings {
   aoIntensity: number;          // 0-1
   motionBlurEnabled: boolean;   // HQ only — afterimage motion blur
   motionBlurStrength: number;   // 0-0.98 (AfterimagePass damp value)
+  // ── Robot base alignment (display/collision only) ────────────────────────
+  robotBaseOffsetMm: { x: number; y: number; z: number };
+  robotBaseYawDeg: number;
+  robotBaseFlip: { x: boolean; y: boolean; z: boolean };
   // ── Collision / skeleton settings ────────────────────────────────────────
   capsulesVisible: boolean;      // show glow capsules around robot segments
   capsuleRadiusWarn: number;    // outer warn-zone radius (m) — robot slows
@@ -62,6 +66,10 @@ export const DEFAULT_SETTINGS: ViewerSettings = {
   aoIntensity: 0.5,
   motionBlurEnabled: false,
   motionBlurStrength: 0.7,
+  // Robot base alignment defaults
+  robotBaseOffsetMm: { x: 0, y: 0, z: 0 },
+  robotBaseYawDeg: 0,
+  robotBaseFlip: { x: false, y: false, z: false },
   // Collision / skeleton defaults
   capsulesVisible:    true,
   capsuleRadiusWarn:  0.35,
@@ -84,6 +92,8 @@ function load(): ViewerSettings {
       // Deep-merge matColors (Record<string,string>)
       matColors: { ...DEFAULT_SETTINGS.matColors, ...parsed.matColors },
       jOffsets:  parsed.jOffsets ?? DEFAULT_SETTINGS.jOffsets,
+      robotBaseOffsetMm: { ...DEFAULT_SETTINGS.robotBaseOffsetMm, ...parsed.robotBaseOffsetMm },
+      robotBaseFlip: { ...DEFAULT_SETTINGS.robotBaseFlip, ...parsed.robotBaseFlip },
     };
   } catch {
     return DEFAULT_SETTINGS;

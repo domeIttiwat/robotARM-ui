@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState, type ReactNode } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls, useGLTF, ContactShadows, Environment } from "@react-three/drei";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
@@ -30,6 +30,28 @@ const BASE_AXES: [number, number, number][] = [
   [1, 0, 0],   // J5
   [0, 1, 0],   // J6
 ];
+
+function RobotBaseGroup({
+  settings,
+  children,
+}: {
+  settings: ViewerSettings;
+  children: ReactNode;
+}) {
+  const offset = settings.robotBaseOffsetMm ?? DEFAULT_SETTINGS.robotBaseOffsetMm;
+  const flip   = settings.robotBaseFlip     ?? DEFAULT_SETTINGS.robotBaseFlip;
+  const yaw    = (settings.robotBaseYawDeg ?? DEFAULT_SETTINGS.robotBaseYawDeg) * DEG;
+
+  return (
+    <group
+      position={[offset.x / 1000, offset.y / 1000, offset.z / 1000]}
+      rotation={[0, yaw, 0]}
+      scale={[flip.x ? -1 : 1, flip.y ? -1 : 1, flip.z ? -1 : 1]}
+    >
+      {children}
+    </group>
+  );
+}
 
 // ─── Exposure controller ──────────────────────────────────────────────────────
 function ExposureController({ exposure }: { exposure: number }) {
@@ -482,7 +504,9 @@ export default function RobotViewer3D({
           {/* When reflector is on: HDR still lights the scene but NOT shown as skybox */}
           {isHQ && <Environment files={`/models/${s.hdrFile ?? DEFAULT_SETTINGS.hdrFile}`} background={s.bgMode === "hdr"} />}
 
-          <RobotScene joints={joints} flips={flips} offsets={s.jOffsets ?? DEFAULT_SETTINGS.jOffsets} gripperPos={gripperPos} onNodesReady={onNodesReady} />
+          <RobotBaseGroup settings={s}>
+            <RobotScene joints={joints} flips={flips} offsets={s.jOffsets ?? DEFAULT_SETTINGS.jOffsets} gripperPos={gripperPos} onNodesReady={onNodesReady} />
+          </RobotBaseGroup>
 
           <MaterialController
             matColors={s.matColors ?? {}}

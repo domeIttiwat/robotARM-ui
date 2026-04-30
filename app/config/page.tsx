@@ -142,6 +142,58 @@ function TCPAxisRow({
   );
 }
 
+function BaseValueRow({
+  label, value, min, max, step, unit, onChange,
+}: {
+  label: string; value: number; min: number; max: number; step: number; unit: string;
+  onChange: (v: number) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+
+  const commit = () => {
+    const n = parseFloat(draft);
+    if (!isNaN(n)) onChange(Math.max(min, Math.min(max, n)));
+    setEditing(false);
+  };
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-2">
+        <span className="text-sm font-semibold text-gray-700 dark:text-[#b0c4e0] w-20 shrink-0">{label}</span>
+        {editing ? (
+          <input
+            autoFocus
+            type="number"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={commit}
+            onKeyDown={(e) => { if (e.key === "Enter") commit(); if (e.key === "Escape") setEditing(false); }}
+            className="w-24 text-xs font-mono text-center bg-blue-50 dark:bg-blue-900/30 border border-blue-400 dark:border-blue-500 rounded-lg px-1.5 py-0.5 outline-none"
+          />
+        ) : (
+          <button
+            onClick={() => { setDraft(value.toFixed(0)); setEditing(true); }}
+            title="คลิกเพื่อกรอกค่า"
+            className="text-xs font-mono text-gray-500 dark:text-[#8090b8] bg-gray-100 dark:bg-[#1a2540] px-2 py-0.5 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:text-blue-600 dark:hover:text-blue-300 transition-colors cursor-text"
+            suppressHydrationWarning
+          >
+            {value.toFixed(0)} {unit}
+          </button>
+        )}
+      </div>
+      <input
+        type="range" min={min} max={max} step={step} value={value}
+        onChange={(e) => onChange(parseFloat(e.target.value))}
+        className="w-full h-1.5 bg-gray-200 dark:bg-[#1a2540] rounded-full appearance-none cursor-pointer accent-blue-600"
+      />
+      <div className="flex justify-between text-[10px] text-gray-400 dark:text-[#6878a8] font-mono">
+        <span>{min} {unit}</span><span>{max} {unit}</span>
+      </div>
+    </div>
+  );
+}
+
 // ── Page component ────────────────────────────────────────────────────────────
 export default function ConfigPage() {
   const router = useRouter();
@@ -167,7 +219,9 @@ export default function ConfigPage() {
         const res = await fetch("/api/sim", { method: "POST" });
         const d = await res.json();
         setSimRunning(d.ok || d.error === "already running");
-        window.open("http://localhost:52002/?53002", "_blank", "noopener");
+        if (d.viewerUrl) {
+          window.open(d.viewerUrl, "_blank", "noopener");
+        }
       }
     } catch {
       // ignore
@@ -194,6 +248,26 @@ export default function ConfigPage() {
     const next = { ...mc };
     delete next[name];
     update({ matColors: next });
+  };
+
+  const baseOffset = settings.robotBaseOffsetMm ?? DEFAULT_SETTINGS.robotBaseOffsetMm;
+  const baseFlip   = settings.robotBaseFlip     ?? DEFAULT_SETTINGS.robotBaseFlip;
+  const baseYaw    = settings.robotBaseYawDeg   ?? DEFAULT_SETTINGS.robotBaseYawDeg;
+
+  const setBaseOffset = (axis: "x" | "y" | "z", value: number) => {
+    update({ robotBaseOffsetMm: { ...baseOffset, [axis]: value } });
+  };
+
+  const setBaseFlip = (axis: "x" | "y" | "z", value: boolean) => {
+    update({ robotBaseFlip: { ...baseFlip, [axis]: value } });
+  };
+
+  const resetBaseAlignment = () => {
+    update({
+      robotBaseOffsetMm: { ...DEFAULT_SETTINGS.robotBaseOffsetMm },
+      robotBaseYawDeg: DEFAULT_SETTINGS.robotBaseYawDeg,
+      robotBaseFlip: { ...DEFAULT_SETTINGS.robotBaseFlip },
+    });
   };
 
   return (
@@ -508,6 +582,71 @@ export default function ConfigPage() {
               value={settings.fogDensity ?? DEFAULT_SETTINGS.fogDensity} min={0.01} max={0.5} step={0.005} decimals={3}
               onChange={(v) => update({ fogDensity: v })}
             />
+          </Section>
+
+          {/* ── Robot Base Alignment ──────────────────────────────────── */}
+          <Section title="Robot Base Alignment">
+            <div className="flex items-center justify-between -mt-3">
+              <p className="text-xs text-gray-400 dark:text-[#8090b8]">ปรับฐานหุ่นให้ตรงกับเฟรมกล้อง — ไม่มีผลต่อการสั่งงานจริง</p>
+              <button
+                onClick={resetBaseAlignment}
+                className="text-[10px] font-black text-gray-400 dark:text-[#8090b8] hover:text-gray-600 dark:hover:text-[#b0c4e0] uppercase"
+              >
+                Reset
+              </button>
+            </div>
+
+            <div className="space-y-4 p-3.5 bg-blue-50 dark:bg-blue-900/15 rounded-2xl border border-blue-200 dark:border-blue-500/20">
+              <p className="text-[10px] font-black text-blue-600 dark:text-blue-300 uppercase tracking-wider">Base Offset</p>
+              {(["x", "y", "z"] as const).map((axis) => (
+                <BaseValueRow
+                  key={axis}
+                  label={`Offset ${axis.toUpperCase()}`}
+                  value={baseOffset[axis]}
+                  min={-3000}
+                  max={3000}
+                  step={10}
+                  unit="mm"
+                  onChange={(v) => setBaseOffset(axis, v)}
+                />
+              ))}
+            </div>
+
+            <div className="space-y-4 p-3.5 bg-gray-50 dark:bg-[#111d35] rounded-2xl">
+              <BaseValueRow
+                label="Yaw"
+                value={baseYaw}
+                min={-180}
+                max={180}
+                step={1}
+                unit="°"
+                onChange={(v) => update({ robotBaseYawDeg: v })}
+              />
+              <div className="grid grid-cols-3 gap-2">
+                {([
+                  { axis: "x", label: "Flip X" },
+                  { axis: "y", label: "Flip Y" },
+                  { axis: "z", label: "Flip Z" },
+                ] as const).map(({ axis, label }) => {
+                  const active = baseFlip[axis];
+                  return (
+                    <button
+                      key={axis}
+                      onClick={() => setBaseFlip(axis, !active)}
+                      className={`flex items-center justify-center gap-1 px-2 py-2 rounded-xl text-xs font-black transition-colors ${
+                        active
+                          ? "bg-orange-500 text-white"
+                          : "bg-gray-200 dark:bg-[#1a2540] text-gray-500 dark:text-[#8090b8] hover:bg-gray-300 dark:hover:bg-[#243050]"
+                      }`}
+                      suppressHydrationWarning
+                    >
+                      <FlipHorizontal2 size={12} />
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </Section>
 
           {/* ── Joint Axis Flip ────────────────────────────────────────── */}
