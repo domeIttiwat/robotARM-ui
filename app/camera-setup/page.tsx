@@ -16,6 +16,7 @@ import {
 import {
   loadCameraConfig, saveCameraConfig, type CameraConfig,
 } from "@/lib/cameraConfig";
+import QuickBoardConnect from "@/components/QuickBoardConnect";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface SafetyFrame {
@@ -1223,6 +1224,7 @@ export default function CameraSetupPage() {
   const [camCfg, setCamCfg]              = useState<CameraConfig>({ safetyLeft: -1, safetyRight: -1, wrist: -1, safetyEnabled: false, wristEnabled: false });
   const [safetyRestart, setSafetyRestart] = useState(0);
   const [wristRestart,  setWristRestart]  = useState(0);
+  const [showAdvanced,  setShowAdvanced]  = useState(false);
 
   useEffect(() => {
     const cfg = loadCameraConfig();
@@ -1275,8 +1277,21 @@ export default function CameraSetupPage() {
         </div>
       </header>
 
-      {/* ── Connection Config Bar ────────────────────────────────────────────── */}
-      <ConnectionBar config={config} onApply={handleApplyConfig} />
+      {/* ── Quick Board Connect ──────────────────────────────────────────────── */}
+      <QuickBoardConnect config={config} onApply={handleApplyConfig} />
+
+      {/* ── Advanced: Connection Config Bar (collapsible) ───────────────────── */}
+      <div className="shrink-0 border-b border-black/5 dark:border-white/5">
+        <button
+          onClick={() => setShowAdvanced((o) => !o)}
+          className="w-full flex items-center gap-2 px-6 py-1.5 text-left bg-gray-50/60 dark:bg-[#0a1428]/60 hover:bg-gray-100 dark:hover:bg-[#111d35] transition-colors"
+        >
+          <Settings size={10} className="text-gray-400" />
+          <span className="text-[10px] font-black text-gray-400 uppercase tracking-wide flex-1">Advanced — ROS IP &amp; Ports</span>
+          <ChevronDown size={10} className={`text-gray-400 transition-transform duration-200 ${showAdvanced ? "rotate-180" : ""}`} />
+        </button>
+        {showAdvanced && <ConnectionBar config={config} onApply={handleApplyConfig} />}
+      </div>
 
       {/* ── Camera Assignment Bar ────────────────────────────────────────────── */}
       <CameraAssignBar
