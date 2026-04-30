@@ -52,7 +52,8 @@ export default function CameraFeedWidget() {
   // Load URL from localStorage after mount (respects Jetson IP config)
   useEffect(() => {
     const cfg = loadJetsonConfig();
-    setWsUrl(makeWsUrl(getBoardIp(cfg, "safety"), cfg.safetyPort));
+    // บังคับให้วิ่งเข้าหาคอมพิวเตอร์ตัวเอง (localhost) เสมอ
+    setWsUrl(`ws://localhost:${cfg.safetyPort}`);
   }, []);
 
   const connect = useCallback(() => {

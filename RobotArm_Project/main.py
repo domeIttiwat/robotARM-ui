@@ -18,7 +18,6 @@ URDF_PATH  = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Arctos_de
 SAVE_FILE  = os.path.join(os.path.dirname(os.path.abspath(__file__)), "saved_positions.json")
 robot = rtb.Robot.URDF(URDF_PATH)
 print(robot)
-
 q_zero = np.zeros(6)
 print("\n--- Forward Kinematics (Home) ---")
 print(robot.fkine(q_zero))
