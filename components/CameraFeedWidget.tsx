@@ -53,7 +53,7 @@ export default function CameraFeedWidget() {
   useEffect(() => {
     const cfg = loadJetsonConfig();
     // บังคับให้วิ่งเข้าหาคอมพิวเตอร์ตัวเอง (localhost) เสมอ
-    setWsUrl(`ws://localhost:${cfg.safetyPort}`);
+    setWsUrl(makeWsUrl(getBoardIp(cfg, "safety"), cfg.safetyPort));
   }, []);
 
   const connect = useCallback(() => {

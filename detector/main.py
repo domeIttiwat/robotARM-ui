@@ -33,6 +33,7 @@ class FastCameraBridge:
         self._lock = threading.Lock()
         self._latest_payload = None
         self._clients = set()
+        self._skeleton_clients = set()
 
     def run(self):
         log.info(f"Connecting to Jetson Camera Stream at tcp://{self.args.jetson_ip}:5555 ...")
@@ -53,16 +54,15 @@ class FastCameraBridge:
                 b64_l = base64.b64encode(data["cam_left"]).decode("ascii")
                 b64_r = base64.b64encode(data["cam_right"]).decode("ascii")
 
-                # 3. สร้าง Payload ส่งให้หน้าเว็บ (ใส่ค่าหลอกๆ ให้เว็บไม่ Error)
-                payload = {
-                    "cam_left": b64_l,
-                    "cam_right": b64_r,
-                    "safety_level": 0,       # บังคับเป็นสถานะ "ปกติ"
-                    "distance_mm": None,     # ไม่แสดงระยะ
-                    "tcp": {"x": 0, "y": 0, "z": 0},
-                    "person": None,
-                    "rail_pos": 0,
-                }
+                # 3. สร้าง Payload ส่งให้หน้าเว็บ โดยเก็บข้อมูลเสริมจาก Jetson ไว้ด้วย
+                payload = dict(data)
+                payload["cam_left"] = b64_l
+                payload["cam_right"] = b64_r
+                payload.setdefault("safety_level", 0)
+                payload.setdefault("distance_mm", None)
+                payload.setdefault("tcp", {"x": 0, "y": 0, "z": 0})
+                payload.setdefault("person", None)
+                payload.setdefault("rail_pos", 0)
 
                 with self._lock:
                     self._latest_payload = payload
@@ -92,6 +92,46 @@ class FastCameraBridge:
             self._clients.discard(websocket)
             log.info(f"WS client disconnected: {websocket.remote_address}")
 
+    async def skeleton_ws_handler(self, websocket):
+        log.info(f"Skeleton WS client connected: {websocket.remote_address}")
+        self._skeleton_clients.add(websocket)
+        try:
+            async for _ in websocket:
+                pass
+        except websockets.exceptions.ConnectionClosed:
+            pass
+        finally:
+            self._skeleton_clients.discard(websocket)
+            log.info(f"Skeleton WS client disconnected: {websocket.remote_address}")
+
+    def _make_skeleton_payload(self, payload):
+        person = payload.get("person") if payload else None
+        if not isinstance(person, dict) or not person:
+            return {"persons": [], "timestamp": int(time.time() * 1000)}
+
+        keypoints = {}
+        if all(k in person for k in ("x", "y", "z")):
+            keypoints["23"] = {
+                "x": float(person["x"]),
+                "y": float(person["y"]),
+                "z": float(person["z"]),
+                "visibility": 1.0,
+            }
+        else:
+            for idx, pt in person.items():
+                if isinstance(pt, dict) and all(k in pt for k in ("x", "y", "z")):
+                    keypoints[str(idx)] = {
+                        "x": float(pt["x"]),
+                        "y": float(pt["y"]),
+                        "z": float(pt["z"]),
+                        "visibility": float(pt.get("visibility", 1.0)),
+                    }
+
+        return {
+            "persons": [{"id": 0, "keypoints": keypoints}] if keypoints else [],
+            "timestamp": payload.get("timestamp", int(time.time() * 1000)),
+        }
+
     async def ws_broadcast(self):
         """กระจายภาพให้ทุก Browser ที่เปิดหน้าเว็บอยู่"""
         while True:
@@ -109,9 +149,23 @@ class FastCameraBridge:
                         dead.add(ws)
                 self._clients -= dead
 
+            if payload and self._skeleton_clients:
+                data = json.dumps(self._make_skeleton_payload(payload))
+                dead = set()
+                for ws in list(self._skeleton_clients):
+                    try:
+                        await ws.send(data)
+                    except Exception:
+                        dead.add(ws)
+                self._skeleton_clients -= dead
+
     async def run_ws_server(self):
-        async with websockets.serve(self.ws_handler, "0.0.0.0", self.args.ws_port):
+        async with (
+            websockets.serve(self.ws_handler, "0.0.0.0", self.args.ws_port),
+            websockets.serve(self.skeleton_ws_handler, "0.0.0.0", self.args.skeleton_port),
+        ):
             log.info(f"WebSocket server listening on ws://0.0.0.0:{self.args.ws_port}")
+            log.info(f"Skeleton WebSocket server listening on ws://0.0.0.0:{self.args.skeleton_port}")
             await self.ws_broadcast()
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -120,6 +174,7 @@ def main():
     parser = argparse.ArgumentParser(description="Fast ZMQ to WebSocket Bridge")
     parser.add_argument("--jetson-ip",  type=str,   default="127.0.0.1", help="IP of Jetson running v1.py")  #default="192.168.137.38"
     parser.add_argument("--ws-port",    type=int,   default=8765,             help="WebSocket server port")  #default=8765
+    parser.add_argument("--skeleton-port", type=int, default=8767,             help="Skeleton WebSocket server port")
     args = parser.parse_args()
 
     # แก้ปัญหา Asyncio บน Windows
